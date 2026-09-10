@@ -324,3 +324,26 @@ fn a_declared_type_colours_the_plug_of_every_use() {
         "the getter should report the declared type"
     );
 }
+
+#[test]
+fn a_font_name_cannot_break_out_of_the_stylesheet() {
+    // The font stack comes from the document, and lands in an XML <style>.
+    let request = serde_json::json!({
+        "code": "Start",
+        "language": "de",
+        "platform": "calliope",
+        "font": "Fo\"o</style><script>alert(1)</script>, sans & serif",
+    });
+    let svg = parser::render_request(&request.to_string()).expect("render");
+
+    assert_eq!(
+        svg.matches("</style>").count(),
+        1,
+        "the stylesheet is closed once, by the renderer"
+    );
+    assert!(!svg.contains("<script>"), "no markup came in with the font");
+    assert!(
+        svg.contains("&lt;/style&gt;") && svg.contains("sans &amp; serif"),
+        "the name survives as text: {svg}"
+    );
+}

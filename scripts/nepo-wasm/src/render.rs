@@ -79,7 +79,13 @@ fn starts_with_output(stack: &StackLayout) -> bool {
 
 /// `.blocklyText` and the editable-field rules from Open Roberta's `css.js`.
 fn defs(font: &str, theme: &str) -> String {
-    let stack = css_font_stack(font);
+    // SVG is XML, and XML gives `<style>` no raw-text exemption: an `&` or a
+    // `<` inside the font stack would either make the document ill-formed or
+    // — with `</style>` — end the element early and let the rest of the name
+    // be read as markup. The stack is caller-supplied (`#nepo(font: ...)`),
+    // so it is escaped like any other text node. A parser hands the CSS back
+    // unescaped, so a legitimate family name is unaffected.
+    let stack = escape_text(&css_font_stack(font));
     let label_fill = if theme == "print" { "#000" } else { "#fff" };
     format!(
         "<style>\
