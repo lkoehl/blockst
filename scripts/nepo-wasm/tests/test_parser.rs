@@ -114,7 +114,8 @@ fn aliases_parse_but_print_open_robertas_wording() {
     let script =
         blocks("Programmstart\n  Wiederhole fortlaufend\n    Zeige Text \"Hallo\"\n  Ende");
     assert_eq!(script[0]["id"], "robControls_start");
-    assert_eq!(script[0]["rows"][0]["fields"][0]["value"], "Start");
+    // Field 0 is the plus mutator every Start block carries.
+    assert_eq!(script[0]["rows"][0]["fields"][1]["value"], "Start");
 
     assert_eq!(script[1]["id"], "robControls_loopForever");
     assert_eq!(
@@ -195,7 +196,7 @@ fn english_renders_the_english_wording() {
     });
     let json = parser::parse_request(&request.to_string()).expect("parse");
     let scripts: Value = serde_json::from_str(&json).unwrap();
-    assert_eq!(scripts[0][0]["rows"][0]["fields"][0]["value"], "start");
+    assert_eq!(scripts[0][0]["rows"][0]["fields"][1]["value"], "start");
     assert_eq!(scripts[0][1]["rows"][0]["fields"][0]["value"], "show");
 }
 
@@ -217,7 +218,9 @@ fn the_extended_beginner_control_set_parses_with_its_real_ids() {
         ]
     );
 
-    let repeat_value = &script[0]["rows"][0]["value"];
+    // "Wiederhole %1 mal" puts the count inside the sentence: Blockly's
+    // `getInputsInline` inlines a value input that is followed by a dummy.
+    let repeat_value = &script[0]["rows"][0]["fields"][1]["value"];
     assert_eq!(repeat_value["id"], "math_number");
     assert_eq!(repeat_value["rows"][0]["fields"][0]["value"], "3");
     assert_eq!(
@@ -337,4 +340,135 @@ fn while_loops_and_sound_mode_match_the_lesson_examples() {
     let sound = &script[0]["rows"][1]["body"][0];
     assert_eq!(sound["id"], "robSensors_sound_getSample");
     assert_eq!(sound["rows"][0]["fields"][1]["value"], "Geräusch");
+}
+
+#[test]
+fn variables_keep_their_dynamic_names() {
+    let script = blocks("Start\n  Schreibe Punkte 0\n  Zeige Text Punkte");
+    assert_eq!(script[1]["id"], "variables_set");
+    assert_eq!(script[1]["rows"][0]["fields"][1]["value"], "Punkte");
+    assert_eq!(script[1]["rows"][0]["value"]["id"], "math_number");
+    assert_eq!(script[2]["rows"][0]["value"]["id"], "variables_get");
+    assert_eq!(
+        script[2]["rows"][0]["value"]["rows"][0]["fields"][0]["value"],
+        "Punkte"
+    );
+}
+
+#[test]
+fn a_declaration_goes_into_the_start_block_and_the_program_follows_it() {
+    let script = blocks(
+        "Start\n  Variable Punkte : Zahl = 0\n  Variable Name : Zeichenkette = \"Ida\"\n  Zeige Text Punkte",
+    );
+
+    // The Start block keeps its title row and grows the mouth `updateShape_`
+    // appends; both declarations go inside it.
+    assert_eq!(script[0]["id"], "robControls_start");
+    let mouth = &script[0]["rows"][1];
+    assert_eq!(mouth["kind"], "statement");
+    let declarations = mouth["body"].as_array().expect("declarations");
+    assert_eq!(declarations.len(), 2);
+    assert_eq!(declarations[0]["id"], "robGlobalVariables_declare");
+    assert_eq!(declarations[0]["category"], "activity");
+
+    // Only declarations may enter that mouth: the action block indented with
+    // them is a sibling of the Start block, exactly as Open Roberta draws it.
+    assert_eq!(script.len(), 2);
+    assert_eq!(script[1]["id"], "mbedActions_display_text");
+}
+
+#[test]
+fn a_start_block_without_declarations_keeps_its_single_row() {
+    let script = blocks("Start\n  Zeige Text \"Hallo\"");
+    assert_eq!(
+        script[0]["rows"].as_array().expect("rows").len(),
+        1,
+        "the declaration mouth exists only once something declares a variable"
+    );
+}
+
+#[test]
+fn the_declared_type_reaches_the_socket_the_getter_and_the_setter() {
+    let script = blocks(
+        "Start\n  Variable Name : Zeichenkette = \"Ida\"\n  Schreibe Name\n  Zeige Text Name",
+    );
+
+    // The declaration's own socket is typed by its dropdown.
+    let declaration = &script[0]["rows"][1]["body"][0];
+    assert_eq!(declaration["rows"][0]["check"], serde_json::json!(["String"]));
+
+    // The setter's empty socket announces the same type ...
+    assert_eq!(script[1]["id"], "variables_set");
+    assert_eq!(script[1]["rows"][0]["check"], serde_json::json!(["String"]));
+
+    // ... and the getter reports it, which is what colours its output plug.
+    let getter = &script[2]["rows"][0]["value"];
+    assert_eq!(getter["id"], "variables_get");
+    assert_eq!(getter["check"], serde_json::json!(["String"]));
+}
+
+#[test]
+fn an_undeclared_variable_still_parses_but_stays_untyped() {
+    let script = blocks("Zeige Text Punkte");
+    let getter = &script[0]["rows"][0]["value"];
+    assert_eq!(getter["id"], "variables_get");
+    assert!(
+        getter.get("check").is_none(),
+        "with nothing declared there is no type to report"
+    );
+}
+
+#[test]
+fn increasing_a_variable_plugs_the_getter_into_a_math_block() {
+    let script = blocks("erhöhe Punkte um 1");
+    assert_eq!(script[0]["id"], "robMath_change");
+    assert_eq!(script[0]["category"], "math");
+    let fields = script[0]["rows"][0]["fields"].as_array().unwrap();
+    let sockets: Vec<&Value> = fields
+        .iter()
+        .filter(|f| f["kind"] == "inline_value")
+        .collect();
+    assert_eq!(sockets.len(), 2);
+    assert_eq!(sockets[0]["value"]["id"], "variables_get");
+    assert_eq!(sockets[1]["value"]["id"], "math_number");
+}
+
+#[test]
+fn a_list_keeps_only_the_item_rows_it_was_given() {
+    let script = blocks("Liste : Zahl <- 1 2 3");
+    let block = &script[0];
+    assert_eq!(block["id"], "robLists_create_with");
+    // Three items, three rows — the catalog's remaining item rows are the
+    // ones Blockly's plus mutator never appended.
+    let rows = block["rows"].as_array().expect("rows");
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[1]["align"], "right");
+    // `setOutput(true, 'Array_' + listType)`.
+    assert_eq!(block["check"], serde_json::json!(["Array_Number"]));
+}
+
+#[test]
+fn a_list_element_takes_the_type_of_the_list_it_comes_from() {
+    let script = blocks(
+        "Start\n  Variable Namen : Liste Zeichenkette\n  Zeige Text von der Liste Namen nimm #tes 1",
+    );
+    let get_index = &script[1]["rows"][0]["value"];
+    assert_eq!(get_index["id"], "robLists_getIndex");
+    assert_eq!(get_index["check"], serde_json::json!(["String"]));
+}
+
+#[test]
+fn a_condition_without_a_sonst_line_stays_a_plain_if() {
+    // Both `robControls_if` and `robControls_ifElse` match the header line;
+    // only the `sonst` line tells them apart, so the plain block has to win
+    // the tie — and has to win it the same way on every run.
+    for _ in 0..8 {
+        let script = blocks("wenn Taste A gedrückt?\n  Lösche Bildschirm\nEnde");
+        assert_eq!(script[0]["id"], "robControls_if");
+        assert_eq!(script[0]["rows"].as_array().expect("rows").len(), 2);
+    }
+
+    let script = blocks("wenn Taste A gedrückt?\n  Lösche Bildschirm\nsonst\n  Zeige Text \"aus\"");
+    assert_eq!(script[0]["id"], "robControls_ifElse");
+    assert_eq!(script[0]["rows"][2]["body"][0]["id"], "mbedActions_display_text");
 }

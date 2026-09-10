@@ -16,6 +16,7 @@ pub mod matrix;
 pub mod measure;
 pub mod model;
 pub mod parser;
+pub mod variables;
 mod protocol;
 pub mod render;
 pub mod svg;

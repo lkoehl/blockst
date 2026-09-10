@@ -198,6 +198,20 @@ fn colour_picker_keeps_a_useful_fixed_width() {
 }
 
 #[test]
+fn variables_use_open_robertas_variable_colour_and_menu_shape() {
+    let svg = render("Schreibe Punkte 0\nZeige Text Punkte");
+    assert!(svg.contains("fill=\"#9085BA\""), "variable category colour");
+    assert!(svg.contains("Punkte"), "variable name was lost");
+    // `FieldDropdown.render_` appends the arrow to the option text and tints
+    // it with the block's own colour, which is why it arrives in its own
+    // tspan rather than inside the label run.
+    assert!(
+        svg.contains("Punkte<tspan fill=\"#9085BA\"> \u{25BE}</tspan>"),
+        "variable should render as a menu"
+    );
+}
+
+#[test]
 fn the_matrix_paints_twenty_five_cells() {
     let svg = render("Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)");
     // 25 pixel boxes, all 16 wide.
@@ -220,9 +234,10 @@ fn text_measurements_from_the_host_are_used() {
     let wide = parser::render_request(&request.to_string()).expect("render");
     assert_ne!(plain, wide, "supplied widths were ignored");
     // The official start block also has its two-space layout field before
-    // the hidden DEBUG field: 400 + 10 separator + 8.155 space width + 20.
+    // the hidden DEBUG field, and the plus mutator ahead of both:
+    // 27 icon + 400 + 10 separator + 8.155 space width + 20.
     assert!(
-        wide.contains("H 438.155"),
+        wide.contains("H 465.155"),
         "block should grow to fit the label"
     );
 }
@@ -274,4 +289,38 @@ fn paths(svg: &str) -> Vec<String> {
         rest = &rest[from + end..];
     }
     out
+}
+
+#[test]
+fn a_declaration_is_drawn_in_the_start_blocks_own_colour_with_a_minus() {
+    let svg = render("Start\n  Variable Punkte : Zahl = 0");
+    // CAT_ACTIVITY_RGB: a declaration belongs to the Start block, not to the
+    // violet variable category.
+    assert!(
+        svg.matches(theme::category_colour("activity")).count() >= 2,
+        "the Start block and its declaration share the activity colour"
+    );
+    assert!(
+        svg.contains("M18 11h-12c-1.104 0-2 .896-2 2s.896 2 2 2h12"),
+        "the declaration carries Blockly's minus mutator"
+    );
+    assert!(
+        svg.contains("M18 10h-4v-4"),
+        "and the Start block the plus that created it"
+    );
+}
+
+#[test]
+fn a_declared_type_colours_the_plug_of_every_use() {
+    let svg = render("Start\n  Variable Name : Zeichenkette = \"Ida\"\n  Zeige Text Name");
+    // Blockly.DATA_TYPE.String. Without the declaration the getter's plug
+    // would take the block's own violet.
+    assert!(
+        svg.contains(&format!(
+            "{} z\" fill=\"{}\"/>",
+            nepo_wasm::svg::TAB_PATH_DOWN_OUTER,
+            theme::data_type_colour("String")
+        )),
+        "the getter should report the declared type"
+    );
 }

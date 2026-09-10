@@ -3,7 +3,7 @@
 dir = "ltr"
 
 [specs]
-robControls_start = "start %GAP"
+robControls_start = "%MUTATOR start %GAP | %ST"
 mbedActions_display_text = "show %TYPE %OUT"
 mbedActions_display_image = "show %TYPE %VALUE"
 mbedActions_display_clear = "clear display"
@@ -37,6 +37,17 @@ mbedColour_picker = "%COLOUR"
 mbedImage_image = "%PICTURE"
 mbedImage_get_image = "%IMAGE"
 text_comment = "comment %TEXT"
+variables_get = "%VAR"
+variables_set = "set %VAR to %VALUE"
+robGlobalVariables_declare = "%MUTATOR variable %VAR : %TYPE \u2190 %VALUE"
+robMath_change = "change %VAR by %DELTA"
+robLists_create_with = "%PLUS %MINUS list : %LIST_TYPE \u2190 %N0 %ADD0 | %N1 %ADD1 | %N2 %ADD2 | %N3 %ADD3 | %N4 %ADD4 | %N5 %ADD5"
+robLists_repeat = "create list with item %LIST_TYPE %ITEM repeated %NUM times"
+robLists_length = "length of %VALUE"
+robLists_isEmpty = "%VALUE is empty"
+robLists_indexOf = "in list %VALUE %END %FIND"
+robLists_getIndex = "in list %VALUE %MODE %WHERE %AT"
+robLists_setIndex = "in list %LIST %MODE %WHERE %AT as %TO"
 
 [dropdowns]
 mbedActions_display_text.TYPE = ["text", "character"]
@@ -59,6 +70,17 @@ robSensors_timer_getSample.PORT = ["1"]
 mbedSensors_timer_reset.PORT = ["1"]
 mbedImage_get_image.IMAGE = ["Heart", "Smile", "Stick figure", "Giraffe", "Umbrella"]
 controls_whileUntil.MODE = ["until", "while"]
+robGlobalVariables_declare.TYPE = [
+  "Number", "Boolean", "String", "Colour", "Image",
+  "List Number", "List Boolean", "List String", "List Colour", "List Image",
+]
+robLists_create_with.LIST_TYPE = ["Number", "Boolean", "String", "Colour", "Image"]
+robLists_repeat.LIST_TYPE = ["Number", "Boolean", "String", "Colour", "Image"]
+robLists_indexOf.END = ["find first occurrence of item", "find last occurrence of item"]
+robLists_getIndex.MODE = ["get", "get and remove", "remove"]
+robLists_getIndex.WHERE = ["#", "# from end", "first", "last"]
+robLists_setIndex.MODE = ["set", "insert at"]
+robLists_setIndex.WHERE = ["#", "# from end", "first", "last"]
 
 [aliases]
 robControls_start = ["Start"]
@@ -66,3 +88,13 @@ mbedActions_display_text = ["show text %OUT", "Show Text %OUT"]
 mbedActions_display_image = ["show image %VALUE", "Show Image %VALUE"]
 actions_rgbLed_hidden_on_calliope = ["turn RGB LED on %COLOUR"]
 robSensors_key_getSample = ["key %PORT pressed?"]
+variables_set = ["write %VAR %VALUE"]
+robLists_create_with = [
+  "list : %LIST_TYPE <- %N0 %ADD0 | %N1 %ADD1 | %N2 %ADD2 | %N3 %ADD3 | %N4 %ADD4 | %N5 %ADD5",
+]
+robGlobalVariables_declare = [
+  "variable %VAR : %TYPE = %VALUE",
+  "variable %VAR : %TYPE <- %VALUE",
+  "declare %TYPE %VAR = %VALUE",
+  "variable %VAR : %TYPE %VALUE",
+]

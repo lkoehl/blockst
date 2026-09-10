@@ -28,15 +28,62 @@
     "  2": 26.4,
     "  3": 26.4,
     "  4": 26.4,
-    "#": 8.8
+    "#": 8.8,
+    "Variable": 62.0,
+    "Punkte": 47.0,
+    ":": 5.0,
+    "Zahl ▾": 43.0,
+    "←": 15.0,
+    "wenn": 34.0
   },
   "cases": [
-    { "id": "robControls_start", "source": "Start" },
-    { "id": "mbedActions_display_text", "source": "Zeige Text \"Hallo\"" },
-    { "id": "mbedActions_display_text_empty", "source": "Zeige Text" },
-    { "id": "actions_rgbLed_hidden_on_calliope", "source": "Schalte RGB LED an Farbe (#ff0000)" },
-    { "id": "robSensors_key_getSample", "source": "Taste A gedrückt?" },
-    { "id": "robControls_loopForever", "source": "Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\nEnde" },
-    { "id": "mbedImage_image", "source": "Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)" }
+    {
+      "id": "robControls_start",
+      "source": "Start"
+    },
+    {
+      "id": "mbedActions_display_text",
+      "source": "Zeige Text \"Hallo\""
+    },
+    {
+      "id": "mbedActions_display_text_empty",
+      "source": "Zeige Text"
+    },
+    {
+      "id": "actions_rgbLed_hidden_on_calliope",
+      "source": "Schalte RGB LED an Farbe (#ff0000)"
+    },
+    {
+      "id": "robSensors_key_getSample",
+      "source": "Taste A gedrückt?"
+    },
+    {
+      "id": "robControls_loopForever",
+      "source": "Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\nEnde"
+    },
+    {
+      "id": "mbedImage_image",
+      "source": "Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)"
+    },
+    {
+      "id": "robGlobalVariables_declare",
+      "source": "Variable Punkte : Zahl = 0"
+    },
+    {
+      "id": "robControls_start_declare",
+      "source": "Start\n  Variable Punkte : Zahl = 0"
+    },
+    {
+      "id": "robControls_if",
+      "source": "wenn Taste A gedrückt?\n  Zeige Text \"Hallo\"\nEnde"
+    },
+    {
+      "id": "mbedImage_get_image",
+      "source": "Herz"
+    },
+    {
+      "id": "mbedActions_display_image",
+      "source": "Zeige Bild Herz"
+    }
   ]
 }

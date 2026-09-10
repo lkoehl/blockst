@@ -422,11 +422,9 @@ fn render_field(
             r = fmt(FIELD_BOX_RADIUS),
         ),
         SegmentSpec::Image { value } => render_image_field(value, x, y, colours),
-        SegmentSpec::Icon { name } if name == "plus" => format!(
-            "<g transform=\"translate({} {})\"><rect width=\"16\" height=\"16\" fill-opacity=\"0\"/><path d=\"M18 10h-4v-4c0-1.104-.896-2-2-2s-2 .896-2 2l.071 4h-4.071c-1.104 0-2 .896-2 2s.896 2 2 2l4.071-.071-.071 4.071c0 1.104.896 2 2 2s2-.896 2-2v-4.071l4 .071c1.104 0 2-.896 2-2s-.896-2-2-2z\" transform=\"scale(.67)\" fill=\"#fff\" fill-opacity=\".6\"/></g>",
-            fmt(x),
-            fmt(y),
-        ),
+        SegmentSpec::Icon { name } if name == "plus" || name == "minus" => {
+            render_mutator_icon(name, x, y)
+        }
         SegmentSpec::Icon { name } if name == "quote_open" || name == "quote_close" => {
             let quote = if name == "quote_open" { "“" } else { "”" };
             format!(
@@ -442,6 +440,24 @@ fn render_field(
             String::new()
         }
     }
+}
+
+/// `Blockly.MutatorPlus.drawIcon_` / `Blockly.MutatorMinus.drawIcon_`: a
+/// transparent 16x16 hit target with the symbol drawn at two-thirds scale.
+/// Open Roberta shows the plus wherever a block can grow — another condition,
+/// another list item — and the minus on every part that can be taken away
+/// again, which for a variable is its declaration.
+fn render_mutator_icon(name: &str, x: f32, y: f32) -> String {
+    let symbol = if name == "minus" {
+        "M18 11h-12c-1.104 0-2 .896-2 2s.896 2 2 2h12c1.104 0 2-.896 2-2s-.896-2-2-2z"
+    } else {
+        "M18 10h-4v-4c0-1.104-.896-2-2-2s-2 .896-2 2l.071 4h-4.071c-1.104 0-2 .896-2 2s.896 2 2 2l4.071-.071-.071 4.071c0 1.104.896 2 2 2s2-.896 2-2v-4.071l4 .071c1.104 0 2-.896 2-2s-.896-2-2-2z"
+    };
+    format!(
+        "<g transform=\"translate({} {})\"><rect width=\"16\" height=\"16\" fill-opacity=\"0\"/><path d=\"{symbol}\" transform=\"scale(.67)\" fill=\"#fff\" fill-opacity=\".6\"/></g>",
+        fmt(x),
+        fmt(y),
+    )
 }
 
 fn render_empty_inline_socket(
@@ -464,23 +480,45 @@ fn render_empty_inline_socket(
     )
 }
 
+/// Open Roberta's picture dropdown, without Open Roberta's picture.
+///
+/// The lab loads a 24x24 PNG per image from its media bundle. Shipping those
+/// is not an option here, so the preview is drawn from the pixel pattern
+/// instead — at the size the PNG would have had, so the surrounding geometry
+/// is the real one either way. The arrow beside it is Blockly's: the field is
+/// a dropdown, and its `textElement_` holds nothing but that arrow.
 fn render_image_field(name: &str, x: f32, y: f32, colours: &crate::theme::BlockColours) -> String {
     let pixels = image_pixels(name);
+    let cell = 3.0;
+    // Centre the five cells in the picture: (24 - 5 * 3) / 2.
+    let inset = (IMAGE_FIELD_PICTURE - crate::matrix::SIZE as f32 * cell) / 2.0;
     let mut svg = format!(
-        "<rect x=\"{}\" y=\"{}\" width=\"24\" height=\"24\" rx=\"3\" fill=\"{}\" fill-opacity=\"{}\"/>",
-        fmt(x), fmt(y), colours.field_fill, colours.field_fill_opacity
+        "<rect x=\"{}\" y=\"{}\" width=\"{size}\" height=\"{size}\" rx=\"3\" fill=\"{}\" fill-opacity=\"{}\"/>",
+        fmt(x),
+        fmt(y),
+        colours.field_fill,
+        colours.field_fill_opacity,
+        size = fmt(IMAGE_FIELD_PICTURE),
     );
     for (row, pattern) in pixels.iter().enumerate() {
         for (column, on) in pattern.chars().enumerate() {
             if on == '#' {
                 svg.push_str(&format!(
-                    "<rect x=\"{}\" y=\"{}\" width=\"3\" height=\"3\" fill=\"#000\"/>",
-                    fmt(x + 4.5 + column as f32 * 3.0),
-                    fmt(y + 4.5 + row as f32 * 3.0),
+                    "<rect x=\"{}\" y=\"{}\" width=\"{c}\" height=\"{c}\" fill=\"#000\"/>",
+                    fmt(x + inset + column as f32 * cell),
+                    fmt(y + inset + row as f32 * cell),
+                    c = fmt(cell),
                 ));
             }
         }
     }
+    // `arrow_.style.fill = '#ffffff'` — the arrow is a label, not field text,
+    // so it follows the block's label colour into the print theme.
+    svg.push_str(&format!(
+        "<text class=\"nepo-label\" x=\"{}\" y=\"{}\">\u{25BE}</text>",
+        fmt(x + IMAGE_FIELD_ARROW_X),
+        fmt(y + IMAGE_FIELD_ARROW_Y),
+    ));
     svg
 }
 

@@ -134,6 +134,16 @@ const EMPTY_INLINE_SOCKET_WIDTH: f32 = 20.5;
 const INLINE_CHILD_TOP: f32 = 6.0;
 const INLINE_CHILD_BOTTOM: f32 = 5.0;
 
+/// `field.getSize().height`. Blockly's default is 25 and every field here
+/// keeps it — except the picture dropdown, which asks for 34 and makes its
+/// row that tall.
+fn field_height(segment: &SegmentSpec) -> f32 {
+    match segment {
+        SegmentSpec::Image { .. } => IMAGE_FIELD_HEIGHT,
+        _ => FIELD_HEIGHT,
+    }
+}
+
 fn field_width(segment: &SegmentSpec) -> f32 {
     match segment {
         // `Blockly.FieldPixelbox` pins its own width regardless of content.
@@ -141,9 +151,15 @@ fn field_width(segment: &SegmentSpec) -> f32 {
         // The colour picker has no text, but its painted swatch still needs
         // a fixed 22px target. `render_field` adds FIELD_BOX_PAD itself.
         SegmentSpec::ColourField { .. } => COLOUR_FIELD_WIDTH - FIELD_BOX_PAD,
-        SegmentSpec::Image { .. } => 24.0,
+        SegmentSpec::Image { .. } => IMAGE_FIELD_WIDTH,
         SegmentSpec::InlineValue { .. } => EMPTY_INLINE_SOCKET_WIDTH,
-        SegmentSpec::Icon { name } if name == "plus" => 16.0,
+        // `Blockly.Icon.prototype.SIZE`. An icon is not a field in Blockly —
+        // `render()` walks it before `renderCompute_` and shifts the first
+        // row by `SIZE + SEP_SPACE_X`. Modelling it as a leading,uneditable
+        // field of width SIZE produces the same arithmetic, because the row
+        // then adds exactly one SEP_SPACE_X after it. The drawn symbol is
+        // 16 wide; the space it claims is 17.
+        SegmentSpec::Icon { name } if name == "plus" || name == "minus" => 17.0,
         SegmentSpec::Icon { name } if matches!(name.as_str(), "quote_open" | "quote_close") => 12.0,
         other => text_width(&display_text(other), is_monospace(other)),
     }
@@ -364,7 +380,7 @@ pub fn layout_block(
                 0.0
             };
             field_width += width + sep;
-            height = height.max(FIELD_HEIGHT);
+            height = height.max(field_height(field));
             if let Some(child) = inline.as_ref() {
                 height = height.max(child.own_height());
             }

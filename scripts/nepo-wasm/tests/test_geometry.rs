@@ -84,7 +84,7 @@ fn geometry_matches_the_blockly_reference() {
     }
 
     measure::clear_widths();
-    assert_eq!(checked, 7, "every fixture should have a reference");
+    assert_eq!(checked, 12, "every fixture should have a reference");
 }
 
 /// The numbers agreeing is not quite the same as the outline agreeing: a notch

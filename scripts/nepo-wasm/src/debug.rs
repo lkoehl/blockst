@@ -21,6 +21,10 @@ pub struct Node {
 #[derive(Debug, Serialize)]
 pub struct Row {
     pub kind: String,
+    /// `setAlign`. Only the image block and the list block use anything but
+    /// the default, so it is left out when it says nothing.
+    #[serde(skip_serializing_if = "is_left")]
+    pub align: String,
     pub fields: Vec<Field>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub check: Vec<String>,
@@ -57,6 +61,10 @@ pub enum Field {
     Other,
 }
 
+fn is_left(align: &str) -> bool {
+    align == "left"
+}
+
 pub fn describe(scripts: &[Vec<BlockSpec>]) -> Vec<Vec<Node>> {
     scripts
         .iter()
@@ -79,6 +87,7 @@ fn describe_block(block: &BlockSpec) -> Node {
             .iter()
             .map(|row| Row {
                 kind: row.kind.clone(),
+                align: row.align.clone(),
                 fields: row.fields.iter().map(describe_field).collect(),
                 check: row.check.clone(),
                 value: row.value.as_ref().map(|v| Box::new(describe_block(v))),

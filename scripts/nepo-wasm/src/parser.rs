@@ -117,6 +117,8 @@ pub fn parse(
         }
     }
 
+    crate::variables::apply_types(&mut scripts);
+
     Ok(scripts)
 }
 
@@ -153,16 +155,27 @@ fn parse_stack(
         let mut filled = 0usize;
 
         if let Some(child_indent) = child_indent {
-            let nested = parse_stack(lines, index, child_indent, language, platform)?;
+            let mut nested = parse_stack(lines, index, child_indent, language, platform)?;
             match mouths.first() {
-                // A block with a mouth swallows what is indented under it.
+                // A block with a mouth swallows what is indented under it —
+                // but a mouth with a named connection only accepts the blocks
+                // whose notch carries that name. The Start block's `ST` is the
+                // one that does: it takes the leading variable declarations
+                // and lets the program itself follow below, which is exactly
+                // how Open Roberta draws it.
                 Some((name, _)) => {
+                    if let Some(accepted) = mouth_check(&id, name) {
+                        let taken = nested
+                            .iter()
+                            .position(|block| !connects_as(&block.id, &accepted))
+                            .unwrap_or(nested.len());
+                        continuation = nested.split_off(taken);
+                    }
                     bindings.insert(name.clone(), Binding::Statement(nested));
                     filled = 1;
                 }
                 // Everything else reads the indent as "these follow me", which
-                // is how the Start block is written in teaching material even
-                // though NEPO gives it no mouth.
+                // is how a bare stack is written in teaching material.
                 None => continuation = nested,
             }
         } else if !mouths.is_empty() {
@@ -214,6 +227,29 @@ fn parse_stack(
     }
 
     Ok(blocks)
+}
+
+/// The connection name a mouth insists on, if it has one.
+fn mouth_check(id: &str, field: &str) -> Option<String> {
+    catalog::catalog()
+        .blocks
+        .get(id)?
+        .fields
+        .get(field)?
+        .check
+        .first()
+        .cloned()
+}
+
+/// Does this block's notch carry that name? `setPreviousStatement(true, name)`
+/// in Blockly, `connection = "..."` in the catalog.
+fn connects_as(id: &str, connection: &str) -> bool {
+    catalog::catalog()
+        .blocks
+        .get(id)
+        .and_then(|def| def.connection.as_deref())
+        .map(|name| name == connection)
+        .unwrap_or(false)
 }
 
 fn unknown_line_error(line: &Line, language: &Language, platform: &str) -> String {
@@ -307,13 +343,36 @@ fn candidates<'a>(language: &'a Language, platform: &str) -> Vec<(&'a str, &'a P
     out
 }
 
+/// How much a matching pattern is preferred, most significant first.
+///
+/// Everything here is a tie-break, and every one of them has to be decided:
+/// the candidates are iterated out of a hash map, so a rule left to chance
+/// would make the same document render differently from run to run.
+type Rank<'a> = (
+    // A bare variable getter is a catch-all for any identifier. Every
+    // concrete Blockly block wins against it, so `wahr`, `Herz` and aliases
+    // such as `Programmstart` keep their own meaning.
+    bool,
+    // Open Roberta's own wording beats an alias.
+    bool,
+    // The pattern that explains more of the line.
+    usize,
+    // The simpler block: `wenn` on its own is `robControls_if`, and becomes
+    // `robControls_ifElse` only when a `sonst` line turns up. Both patterns
+    // match the header, so without this the else-mouth would appear at
+    // random.
+    std::cmp::Reverse<usize>,
+    // Nothing is left to hash order.
+    std::cmp::Reverse<&'a str>,
+);
+
 /// Match a whole line. Ties are broken towards the canonical wording.
 fn match_line(
     text: &str,
     language: &Language,
     platform: &str,
 ) -> Option<(String, HashMap<String, Binding>)> {
-    let mut best: Option<(usize, bool, String, HashMap<String, Binding>)> = None;
+    let mut best: Option<(Rank, String, HashMap<String, Binding>)> = None;
 
     for (id, pattern, canonical) in candidates(language, platform) {
         let tokens = parse_tokens(pattern, id);
@@ -322,21 +381,21 @@ fn match_line(
             match_tokens(&tokens, text, 0, id, language, platform, &mut bindings)
         {
             if text[consumed..].trim().is_empty() {
-                let score = tokens.len();
-                let better = match &best {
-                    None => true,
-                    Some((best_score, best_canonical, _, _)) => {
-                        (canonical, score) > (*best_canonical, *best_score)
-                    }
-                };
-                if better {
-                    best = Some((score, canonical, id.to_string(), bindings));
+                let rank: Rank<'_> = (
+                    id != "variables_get",
+                    canonical,
+                    tokens.len(),
+                    std::cmp::Reverse(pattern.rows.len()),
+                    std::cmp::Reverse(id),
+                );
+                if best.as_ref().map(|(best, _, _)| rank > *best).unwrap_or(true) {
+                    best = Some((rank, id.to_string(), bindings));
                 }
             }
         }
     }
 
-    best.map(|(_, _, id, bindings)| (id, bindings))
+    best.map(|(_, id, bindings)| (id, bindings))
 }
 
 fn skip_space(text: &str, mut pos: usize) -> usize {
@@ -377,12 +436,13 @@ fn match_tokens(
                 }
                 let matched = match field.kind.as_str() {
                     "dropdown" | "mode" | "image" => match_dropdown(text, pos, id, name, language),
+                    "variable" | "variable_name" => match_variable(text, pos),
                     "text" => match_text(text, pos),
                     "number" => match_number(text, pos),
                     "colour" => match_colour(text, pos),
                     "matrix" => match_matrix(text, pos),
                     "value" | "inline_value" => {
-                        match_value(text, pos, language, platform, inline_budget(id))
+                        match_value(text, pos, language, platform, inline_budget(id, language))
                     }
                     _ => return None,
                 };
@@ -404,15 +464,59 @@ fn match_tokens(
     Some(pos)
 }
 
-/// The small expression-precedence ladder in the beginner toolbox. A
-/// comparison/arithmetic block consumes plain values; a logical operation may
-/// consume comparisons, but not another operation as its first operand.
-fn inline_budget(id: &str) -> u8 {
+/// The expression-precedence ladder.
+///
+/// A block whose pattern *starts* with an inline socket is left-recursive: on
+/// its own it would happily parse itself as its own first operand, forever.
+/// Blockly never has this problem, because there the nesting is done by hand
+/// with the mouse. A text syntax has to say what binds tighter than what, and
+/// the levels below are the usual answer:
+///
+///   0  plain values — a number, a sensor, a variable
+///   1  arithmetic:  `Punkte + 5`
+///   2  comparison:  `Punkte + 5 > 10`
+///   3  logic:       `Punkte > 10 und Taste A gedrückt?`
+///
+/// A block of level *n* may appear where the budget is at least *n*, and its
+/// own operands are parsed with a budget of *n - 1*. Brackets reset the
+/// budget to the top, so anything can be written in any position.
+const TOP_LEVEL: u8 = 3;
+
+fn precedence_level(id: &str) -> u8 {
     match id {
-        "math_arithmetic" | "logic_compare" => 0,
-        "logic_operation" => 1,
-        _ => 2,
+        "math_arithmetic" => 1,
+        "logic_compare" => 2,
+        "logic_operation" => 3,
+        // Everything else that leads with a socket — "%VALUE ist leer?" —
+        // binds as tightly as arithmetic and takes plain values.
+        _ => 1,
     }
+}
+
+fn inline_budget(id: &str, language: &Language) -> u8 {
+    if leads_with_inline(id, language) {
+        precedence_level(id).saturating_sub(1)
+    } else {
+        TOP_LEVEL
+    }
+}
+
+fn leads_with_inline(id: &str, language: &Language) -> bool {
+    let Some(def) = catalog::catalog().blocks.get(id) else {
+        return false;
+    };
+    let Some(pattern) = language.specs.get(id) else {
+        return false;
+    };
+    matches!(
+        pattern.rows.first().and_then(|row| row.first()),
+        Some(Token::Field(name))
+            if def
+                .fields
+                .get(name)
+                .map(|field| field.kind == "inline_value")
+                .unwrap_or(false)
+    )
 }
 
 /// Case-insensitive literal match that is safe on multi-byte characters and
@@ -467,6 +571,29 @@ fn match_dropdown(
         }
     }
     None
+}
+
+/// Blockly's FieldVariable is a dropdown whose entries are made by the user,
+/// not a fixed toolbox list. In source, a variable is an identifier such as
+/// `Punkte` or `zaehler_1`. Restricting this to identifiers keeps a variable
+/// distinct from the quoted text reporter in an otherwise ambiguous socket.
+fn match_variable(text: &str, pos: usize) -> Option<(Binding, usize)> {
+    let rest = &text[pos..];
+    let mut end = 0usize;
+    for (offset, ch) in rest.char_indices() {
+        if ch.is_alphanumeric() || ch == '_' {
+            end = offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    let name = &rest[..end];
+    let valid_start = name
+        .chars()
+        .next()
+        .map(|ch| ch.is_alphabetic() || ch == '_')
+        .unwrap_or(false);
+    valid_start.then_some((Binding::Variable(name.to_string()), pos + end))
 }
 
 /// A quoted or bracketed literal: `"Hallo"`, `'Hallo'` or `[Hallo]`.
@@ -554,18 +681,39 @@ fn match_value(
 ) -> Option<(Binding, usize)> {
     let rest = &text[pos..];
 
+    let mut best: Option<(BlockSpec, usize)> = None;
+
+    // Brackets say where an expression ends, so the ladder has nothing left
+    // to disambiguate inside them: anything may be written there.
     if rest.starts_with('(') {
-        let close = find_closing(rest)?;
-        let inner = &rest[1..close];
-        let (block, consumed) = match_value_body(inner, 0, language, platform, inline_budget)?;
-        if inner[consumed..].trim().is_empty() {
-            return Some((Binding::Value(block), pos + close + 1));
+        if let Some(close) = find_closing(rest) {
+            let inner = &rest[1..close];
+            if let Some((block, consumed)) =
+                match_value_body(inner, 0, language, platform, TOP_LEVEL)
+            {
+                if inner[consumed..].trim().is_empty() {
+                    best = Some((block, pos + close + 1));
+                }
+            }
         }
-        return None;
     }
 
-    let (block, consumed) = match_value_body(text, pos, language, platform, inline_budget)?;
-    Some((Binding::Value(block), consumed))
+    // The bracketed group may only have been the first operand — as in
+    // "(a oder b) und c" — so the unbracketed reading is tried as well and
+    // the longer of the two wins. It terminates because every step down the
+    // ladder lowers the budget.
+    if let Some((block, consumed)) = match_value_body(text, pos, language, platform, inline_budget)
+    {
+        if best
+            .as_ref()
+            .map(|(_, best_consumed)| consumed > *best_consumed)
+            .unwrap_or(true)
+        {
+            best = Some((block, consumed));
+        }
+    }
+
+    best.map(|(block, consumed)| (Binding::Value(block), consumed))
 }
 
 fn find_closing(text: &str) -> Option<usize> {
@@ -592,7 +740,7 @@ fn match_value_body(
     platform: &str,
     inline_budget: u8,
 ) -> Option<(BlockSpec, usize)> {
-    let mut best: Option<(usize, BlockSpec)> = None;
+    let mut best: Option<((usize, bool, std::cmp::Reverse<&str>), BlockSpec)> = None;
 
     for (id, pattern, _) in candidates(language, platform) {
         let def = catalog::catalog().blocks.get(id)?;
@@ -604,27 +752,28 @@ fn match_value_body(
         // first operand. The budget encodes raw values -> comparisons ->
         // logical operations and removes the ambiguity without flat greed.
         let leading_inline = matches!(tokens.first(), Some(Token::Field(name)) if def.fields.get(name).map(|field| field.kind == "inline_value").unwrap_or(false));
-        if leading_inline && (inline_budget == 0 || (inline_budget == 1 && id == "logic_operation"))
-        {
+        if leading_inline && precedence_level(id) > inline_budget {
             continue;
         }
         let mut bindings = HashMap::new();
         if let Some(consumed) =
             match_tokens(&tokens, text, pos, id, language, platform, &mut bindings)
         {
-            let longest = best
+            // Longest match first, then the same tie-breaks as a whole line.
+            let rank = (consumed, id != "variables_get", std::cmp::Reverse(id));
+            if best
                 .as_ref()
-                .map(|(best, _)| consumed > *best)
-                .unwrap_or(true);
-            if longest {
+                .map(|(best, _)| rank > *best)
+                .unwrap_or(true)
+            {
                 if let Ok(block) = catalog::build_block(id, language, &bindings) {
-                    best = Some((consumed, block));
+                    best = Some((rank, block));
                 }
             }
         }
     }
 
-    best.map(|(consumed, block)| (block, consumed))
+    best.map(|((consumed, _, _), block)| (block, consumed))
 }
 
 pub fn render_request(input: &str) -> Result<String, String> {

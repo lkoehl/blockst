@@ -41,6 +41,21 @@ pub const FIELD_TEXT_BASELINE: f32 = FIELD_HEIGHT - 12.5;
 /// `Blockly.FieldPixelbox` fixes its own width at 16.
 pub const PIXEL_BOX_SIZE: f32 = 16.0;
 
+/// `new Blockly.FieldDropdownImage(options, '/dropDowns/', 24, 24, 'png')` in
+/// `blocks/mbedImage.js`: the picture itself is 24 by 24.
+pub const IMAGE_FIELD_PICTURE: f32 = 24.0;
+/// `FieldDropdownImage` sets `size_ = (width + 10, height + 2 *
+/// INLINE_PADDING_Y)`. The extra ten pixels are where the dropdown arrow
+/// goes; the extra ten in height are why a block holding one of these
+/// pictures is taller than every other block — the picture needs five pixels
+/// of air above and below, and `renderCompute_` takes the field's own height
+/// as the row's minimum.
+pub const IMAGE_FIELD_WIDTH: f32 = IMAGE_FIELD_PICTURE + 10.0;
+pub const IMAGE_FIELD_HEIGHT: f32 = IMAGE_FIELD_PICTURE + 2.0 * INLINE_PADDING_Y;
+/// `textElement_` is placed at `x = size_.width - 6`, `y = size_.height / 2`.
+pub const IMAGE_FIELD_ARROW_X: f32 = IMAGE_FIELD_WIDTH - 6.0;
+pub const IMAGE_FIELD_ARROW_Y: f32 = IMAGE_FIELD_HEIGHT / 2.0;
+
 /// `.blocklyText { font-size: 11pt }`, converted to SVG user units (px).
 pub const FONT_SIZE_PT: f32 = 11.0;
 pub const FONT_SIZE_PX: f32 = FONT_SIZE_PT * 96.0 / 72.0;

@@ -8,7 +8,7 @@ dir = "ltr"
 
 [specs]
 # START_PROGRAM; GAP is the two-space field before the hidden DEBUG field.
-robControls_start = "Start %GAP"
+robControls_start = "%MUTATOR Start %GAP | %ST"
 # DISPLAY_SHOW, DISPLAY_TEXT, DISPLAY_CHARACTER
 mbedActions_display_text = "Zeige %TYPE %OUT"
 # DISPLAY_SHOW, DISPLAY_IMAGE, DISPLAY_ANIMATION
@@ -50,6 +50,26 @@ mbedColour_picker = "%COLOUR"
 mbedImage_image = "%PICTURE"
 mbedImage_get_image = "%IMAGE"
 text_comment = "Kommentar %TEXT"
+variables_get = "%VAR"
+variables_set = "Schreibe %VAR %VALUE"
+# VARIABLES_TITLE + name + ':' + type + '\u2190'. The arrow is a literal in
+# `blocks/variables.js`, mirrored to '\u2192' in right-to-left locales.
+robGlobalVariables_declare = "%MUTATOR Variable %VAR : %TYPE \u2190 %VALUE"
+# MATH_CHANGE_TITLE
+robMath_change = "erhöhe %VAR um %DELTA"
+# LISTS_CREATE_TITLE, then one right-aligned index label per further item.
+robLists_create_with = "%PLUS %MINUS Liste : %LIST_TYPE \u2190 %N0 %ADD0 | %N1 %ADD1 | %N2 %ADD2 | %N3 %ADD3 | %N4 %ADD4 | %N5 %ADD5"
+# LISTS_REPEAT_TITLE, split at its two placeholders.
+robLists_repeat = "Erzeuge Liste mit Element %LIST_TYPE %ITEM wiederhole es %NUM mal"
+# LISTS_LENGTH_TITLE
+robLists_length = "Länge von %VALUE"
+# LISTS_ISEMPTY_TITLE
+robLists_isEmpty = "%VALUE ist leer?"
+# LISTS_INLIST + LISTS_INDEX_OF_*
+robLists_indexOf = "von der Liste %VALUE %END %FIND"
+robLists_getIndex = "von der Liste %VALUE %MODE %WHERE %AT"
+# LISTS_SET_INDEX_INPUT_TO closes the row: "... ein <Wert>".
+robLists_setIndex = "von der Liste %LIST %MODE %WHERE %AT ein %TO"
 
 [dropdowns]
 mbedActions_display_text.TYPE = ["Text", "Zeichen"]
@@ -72,6 +92,19 @@ robSensors_timer_getSample.PORT = ["1"]
 mbedSensors_timer_reset.PORT = ["1"]
 mbedImage_get_image.IMAGE = ["Herz", "Lächeln", "Strichmännchen", "Giraffe", "Regenschirm"]
 controls_whileUntil.MODE = ["bis", "solange"]
+# Blockly.TYPE_DROPDOWN('calliope') — the order is the one blocks.toml pairs
+# its type ids with, so the two lists must stay in step.
+robGlobalVariables_declare.TYPE = [
+  "Zahl", "logischer Wert", "Zeichenkette", "Farbe", "Bild",
+  "Liste Zahl", "Liste logischer Wert", "Liste Zeichenkette", "Liste Farbe", "Liste Bild",
+]
+robLists_create_with.LIST_TYPE = ["Zahl", "logischer Wert", "Zeichenkette", "Farbe", "Bild"]
+robLists_repeat.LIST_TYPE = ["Zahl", "logischer Wert", "Zeichenkette", "Farbe", "Bild"]
+robLists_indexOf.END = ["suche erstes Auftreten von", "suche letztes Auftreten von"]
+robLists_getIndex.MODE = ["nimm", "nimm und entferne", "entferne"]
+robLists_getIndex.WHERE = ["#tes", "#tes von hinten", "erstes", "letztes"]
+robLists_setIndex.MODE = ["setze", "füge"]
+robLists_setIndex.WHERE = ["#tes", "#tes von hinten", "erstes", "letztes"]
 
 # These short forms were accepted by the original prototype. Keep them as
 # parsing aliases while the renderer prints Open Roberta's current wording.
@@ -82,3 +115,16 @@ actions_rgbLed_hidden_on_calliope = ["Schalte RGB LED an %COLOUR", "Schalte RGB-
 mbedActions_display_text = ["Zeige Text %OUT"]
 mbedActions_display_image = ["Zeige Bild %VALUE"]
 robSensors_key_getSample = ["Taste %PORT gedrückt"]
+variables_set = ["Setze %VAR auf %VALUE"]
+# The arrow is hard to type, and a worksheet author should not have to.
+robGlobalVariables_declare = [
+  "Variable %VAR : %TYPE = %VALUE",
+  "Variable %VAR : %TYPE <- %VALUE",
+  "Anlegen %TYPE %VAR = %VALUE",
+  "Variable %VAR : %TYPE %VALUE",
+]
+robMath_change = ["Erhöhe %VAR um %DELTA", "Ändere %VAR um %DELTA"]
+robLists_create_with = [
+  "Liste : %LIST_TYPE <- %N0 %ADD0 | %N1 %ADD1 | %N2 %ADD2 | %N3 %ADD3 | %N4 %ADD4 | %N5 %ADD5",
+  "Liste %LIST_TYPE mit %N0 %ADD0 | %N1 %ADD1 | %N2 %ADD2 | %N3 %ADD3 | %N4 %ADD4 | %N5 %ADD5",
+]
