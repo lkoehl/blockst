@@ -1,7 +1,8 @@
-# NEPO prototype
+# NEPO renderer
 
-Six Open Roberta blocks rendered by Blockst, and the material for judging how
-close they are.
+A growing set of Open Roberta Calliope/micro:bit beginner blocks rendered by
+Blockst, plus the material for judging the geometry of the original reference
+set.
 
 ```bash
 ./examples/nepo/comparisons/build.sh          # regenerate everything
@@ -17,7 +18,9 @@ either way.
 
 | Path | What it is |
 |---|---|
-| `calliope-prototype.typ` | All six blocks, plus the empty typed sockets |
+| `calliope-prototype.typ` | The original visual reference set, plus empty sockets |
+| `conditions-reference.typ` / `inline-sockets-reference.typ` | Focused fixtures for nested conditions and inline sockets |
+| `fehler-comparison.typ` | Six lesson examples, each beside its Open-Roberta screenshot (requires the local lesson assets) |
 | `mixed-document.typ` | Scratch and NEPO in one document |
 | `comparisons/index.html` | Reference \| Blockst \| overlay, per block |
 | `comparisons/blocks.typ` | One block per page, source for the candidate SVGs |
