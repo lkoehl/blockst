@@ -18,6 +18,11 @@
   "gib geschüttelt Lage",
   "Spiele Viertelnote C4",
   "Zeige Bild Herz",
+  "Start\n  Variable Punkte : Zahl ← 0",
+  "Schreibe Punkte 0",
+  "erhöhe Punkte um 1",
+  "Liste : Zahl ← 1 2 3",
+  "von der Liste Werte nimm #tes 2",
 )
 
 #for (index, source) in blocks.enumerate() {

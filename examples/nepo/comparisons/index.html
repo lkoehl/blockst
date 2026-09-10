@@ -134,18 +134,38 @@
 
 <script>
 const BLOCKS = [
-  { file: 'candidates/block-1.svg', id: 'mbedControls_start',
-    label: 'Programmstart', source: 'Start' },
-  { file: 'candidates/block-2.svg', id: 'mbedActions_display_text',
+  { file: 'candidates/block-01.svg', id: 'robControls_start',
+    label: 'Start', source: 'Start' },
+  { file: 'candidates/block-02.svg', id: 'mbedActions_display_text',
     label: 'Zeige Text', source: 'Zeige Text "Hallo"' },
-  { file: 'candidates/block-3.svg', id: 'mbedActions_leds_on',
+  { file: 'candidates/block-03.svg', id: 'actions_rgbLed_hidden_on_calliope',
     label: 'Schalte RGB LED an', source: 'Schalte RGB LED an (#ff0000)' },
-  { file: 'candidates/block-4.svg', id: 'robSensors_key_isPressed',
+  { file: 'candidates/block-04.svg', id: 'robSensors_key_getSample',
     label: 'Taste gedrückt?', source: 'Taste A gedrückt?' },
-  { file: 'candidates/block-5.svg', id: 'robControls_loopForever',
+  { file: 'candidates/block-05.svg', id: 'robControls_loopForever',
     label: 'Wiederhole unendlich oft', source: 'Wiederhole unendlich oft …' },
-  { file: 'candidates/block-6.svg', id: 'mbedImage_image',
+  { file: 'candidates/block-06.svg', id: 'mbedImage_image',
     label: 'Zeige Bild (5×5-Matrix)', source: 'Zeige Bild (.#.#.|…)' },
+  { file: 'candidates/block-07.svg', id: 'robControls_wait_time',
+    label: 'Warte ms', source: 'Warte ms 1 + 2' },
+  { file: 'candidates/block-08.svg', id: 'robControls_wait_for',
+    label: 'Warte bis', source: 'Warte bis Taste A gedrückt? und wahr' },
+  { file: 'candidates/block-09.svg', id: 'robSensors_gesture_getSample',
+    label: 'Lagesensor', source: 'gib geschüttelt Lage' },
+  { file: 'candidates/block-10.svg', id: 'mbedActions_play_note',
+    label: 'Spiele Note', source: 'Spiele Viertelnote C4' },
+  { file: 'candidates/block-11.svg', id: 'mbedImage_get_image',
+    label: 'Zeige Bild (Auswahl)', source: 'Zeige Bild Herz' },
+  { file: 'candidates/block-12.svg', id: 'robGlobalVariables_declare',
+    label: 'Variable anlegen', source: 'Start / Variable Punkte : Zahl ← 0' },
+  { file: 'candidates/block-13.svg', id: 'variables_set',
+    label: 'Variable schreiben', source: 'Schreibe Punkte 0' },
+  { file: 'candidates/block-14.svg', id: 'robMath_change',
+    label: 'Variable erhöhen', source: 'erhöhe Punkte um 1' },
+  { file: 'candidates/block-15.svg', id: 'robLists_create_with',
+    label: 'Liste erzeugen', source: 'Liste : Zahl ← 1 2 3' },
+  { file: 'candidates/block-16.svg', id: 'robLists_getIndex',
+    label: 'Listenelement holen', source: 'von der Liste Werte nimm #tes 2' },
 ];
 
 const COLOURS = [
@@ -156,6 +176,10 @@ const COLOURS = [
   ['colour',    '#EBC300', 'Blockly.CAT_COLOUR_RGB',   'Farbwähler'],
   ['image',     '#DF01D7', 'Blockly.CAT_IMAGE_RGB',    'Bildblock'],
   ['text',      '#BACC1E', 'Blockly.CAT_TEXT_RGB',     'Textblock'],
+  ['math',      '#005A94', 'Blockly.CAT_MATH_RGB',     'Zahlen, Rechnen, erhöhe'],
+  ['logic',     '#33B8CA', 'Blockly.CAT_LOGIC_RGB',    'wahr/falsch, Vergleich, und/oder'],
+  ['variable',  '#9085BA', 'Blockly.CAT_VARIABLE_RGB', 'Variable lesen und schreiben'],
+  ['list',      '#39378B', 'Blockly.CAT_LIST_RGB',     'Listenblöcke'],
 ];
 
 const DATA_TYPES = [
@@ -174,6 +198,8 @@ const CONSTANTS = [
   ['CORNER_RADIUS', 2, 'Eckenradius — Scratch rundet mit 4'],
   ['Field.size_.height', 25, 'Zeilenhöhe eines Feldes'],
   ['borderRect height', 16, 'Weiße Feldbox'],
+  ['Icon.SIZE', 17, 'Mutator-Icon, plus SEP_SPACE_X Abstand'],
+  ['FieldDropdownImage size_', 34, 'Bild 24 plus Pfeil und INLINE_PADDING_Y'],
   ['.blocklyText', '11pt', 'Beschriftung, sans-serif'],
 ];
 

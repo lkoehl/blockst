@@ -10,6 +10,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../../.." && pwd)"
 
 echo "==> candidate SVGs (Blockst)"
+# Removed first: Typst pads the page number to the width of the page count, so
+# a sheet that grows past nine blocks renames every file it writes and would
+# otherwise leave the old ones behind.
+rm -f "$here"/candidates/block-*.svg
 typst compile "$here/blocks.typ" "$here/candidates/block-{n}.svg" --root "$root"
 
 echo "==> full prototype sheet"
