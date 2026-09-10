@@ -1,0 +1,50 @@
+# German block text.
+#
+# Every string below is the value Open Roberta's own message file gives for the
+# key named in the comment (OpenRoberta/blockly msg/js/de.js). They are not
+# retranslations: "the labels are exactly right" is one of the things this
+# prototype has to show.
+#
+# Pattern syntax:
+#   %NAME   a field or socket declared in blocks.toml
+#   |       row separator; a NEPO block is laid out row by row
+# A row holding a statement socket is drawn but not typed: its contents come
+# from the indentation of the following lines.
+
+dir = "ltr"
+
+[specs]
+# START_PROGRAM
+mbedControls_start = "Start"
+# DISPLAY_SHOW
+mbedActions_display_text = "Zeige %TYPE %OUT"
+# RGBLED_ON
+mbedActions_leds_on = "Schalte RGB LED an %COLOR"
+# SENSOR_KEY + SENSOR_IS_PRESSED
+robSensors_key_isPressed = "Taste %PORT gedrückt?"
+# LOOP_FOREVER | CONTROLS_REPEAT_INPUT_DO
+robControls_loopForever = "Wiederhole unendlich oft | mache %DO"
+# DISPLAY_SHOW
+mbedActions_display_image = "Zeige %TYPE %VALUE"
+text_text = "%TEXT"
+mbedColour_picker = "%COLOUR"
+mbedImage_image = "%PICTURE"
+
+[dropdowns]
+# DISPLAY_TEXT, DISPLAY_CHARACTER
+mbedActions_display_text.TYPE = ["Text", "Zeichen"]
+# DISPLAY_IMAGE, DISPLAY_ANIMATION
+mbedActions_display_image.TYPE = ["Bild", "Animation"]
+# Calliope mini key ports
+robSensors_key_isPressed.PORT = ["A", "B", "A+B"]
+
+# Alternative wordings accepted by the parser. The first is the phrasing used
+# in the prototype brief; it is not what Open Roberta prints, so it parses but
+# never renders.
+[aliases]
+mbedControls_start = ["Programmstart"]
+robControls_loopForever = ["Wiederhole fortlaufend | mache %DO", "Wiederhole unendlich | mache %DO"]
+mbedActions_leds_on = ["Schalte RGB-LED ein %COLOR", "Schalte LED an %COLOR"]
+mbedActions_display_text = ["Zeige Text %OUT"]
+mbedActions_display_image = ["Zeige Bild %VALUE"]
+robSensors_key_isPressed = ["Taste %PORT gedrückt"]

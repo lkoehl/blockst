@@ -1,0 +1,22 @@
+# English block text (OpenRoberta/blockly msg/js/en.js).
+dir = "ltr"
+
+[specs]
+mbedControls_start = "Start"
+mbedActions_display_text = "Show %TYPE %OUT"
+mbedActions_leds_on = "Switch on RGB LED %COLOR"
+robSensors_key_isPressed = "Key %PORT pressed?"
+robControls_loopForever = "Repeat indefinitely | do %DO"
+mbedActions_display_image = "Show %TYPE %VALUE"
+text_text = "%TEXT"
+mbedColour_picker = "%COLOUR"
+mbedImage_image = "%PICTURE"
+
+[dropdowns]
+mbedActions_display_text.TYPE = ["Text", "Character"]
+mbedActions_display_image.TYPE = ["Image", "Animation"]
+robSensors_key_isPressed.PORT = ["A", "B", "A+B"]
+
+[aliases]
+mbedActions_display_text = ["Show Text %OUT"]
+mbedActions_display_image = ["Show Image %VALUE"]

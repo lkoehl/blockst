@@ -1,0 +1,104 @@
+# NEPO block catalog (prototype)
+#
+# Structure only: what shape a block has, which category colours it, and what
+# kind of field or socket each placeholder in the localised pattern stands for.
+# The visible text lives in data/locales/<lang>.toml, so a translation never
+# touches this file and a new block never touches Rust.
+#
+# Transcribed by hand from the official sources:
+#   OpenRoberta/blockly  blocks/mbedControls.js, blocks/mbedActions.js,
+#                        blocks/mbedImage.js, blocks/mbedColour.js,
+#                        blocks/robControls.js, blocks/robSensorDefinitions.js
+#
+# shape:    start | statement | cap | value
+# category: keys of Blockly.CAT_*_RGB (see src/theme.rs)
+# check:    the block's output data type, one of Blockly.DATA_TYPE
+#
+# field kinds:
+#   dropdown  a menu; options come from the locale
+#   text      an editable text field
+#   colour    a colour swatch
+#   matrix    the 5x5 LED grid (expanded by src/matrix.rs)
+#   value     a socket for a reporting block, typed by `check`
+#   statement a mouth holding a stack of blocks
+
+# --- 1. Program start ----------------------------------------------------
+# mbedControls_start: CAT_ACTIVITY_RGB, no previous connection, has next.
+# The plus-mutator that grows a global-variable mouth is out of scope here.
+[blocks.mbedControls_start]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "start"
+category = "activity"
+
+# --- 2. Show text --------------------------------------------------------
+# appendValueInput('OUT').appendField(DISPLAY_SHOW).appendField(TYPE dropdown)
+#   .setCheck(['Number','Boolean','String'])
+# The socket is drawn in the String colour: a single check drives the colour,
+# and String is the type the block is used with in class.
+[blocks.mbedActions_display_text]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "action"
+fields.TYPE = { kind = "dropdown" }
+fields.OUT = { kind = "value", check = "String" }
+
+# --- 3. Switch the RGB LED on -------------------------------------------
+# Follows the RGBLED_ON pattern in blocks/robActionsNewConfig.js:
+# appendValueInput('COLOR').appendField(RGBLED_ON).setCheck('Colour')
+[blocks.mbedActions_leds_on]
+platforms = ["calliope", "calliopev3"]
+shape = "statement"
+category = "action"
+fields.COLOR = { kind = "value", check = "Colour" }
+
+# --- 4. Key pressed? -----------------------------------------------------
+# robSensorDefinitions.js: sensors.key.calliope, mode PRESSED, type Boolean,
+# question = true. Reporting block, so the left plug is Boolean-coloured.
+[blocks.robSensors_key_isPressed]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Boolean"
+fields.PORT = { kind = "dropdown" }
+
+# --- 5. Repeat forever ---------------------------------------------------
+# robControls_loopForever: CAT_CONTROL_RGB, a dummy row with the title and a
+# statement row labelled "mache".
+[blocks.robControls_loopForever]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.DO = { kind = "statement" }
+
+# --- 6. Show image -------------------------------------------------------
+[blocks.mbedActions_display_image]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "action"
+fields.TYPE = { kind = "dropdown" }
+fields.VALUE = { kind = "value", check = "Image" }
+
+# --- Reporting blocks the six above plug into ---------------------------
+
+[blocks.text_text]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "text"
+check = "String"
+fields.TEXT = { kind = "text" }
+
+[blocks.mbedColour_picker]
+platforms = ["calliope", "calliopev3"]
+shape = "value"
+category = "colour"
+check = "Colour"
+fields.COLOUR = { kind = "colour", default = "#ff0000" }
+
+# mbedImage_image builds itself out of six right-aligned rows; the single
+# `matrix` field stands in for all of them until src/matrix.rs expands it.
+[blocks.mbedImage_image]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "image"
+check = "Image"
+fields.PICTURE = { kind = "matrix" }
