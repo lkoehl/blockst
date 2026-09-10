@@ -7,7 +7,10 @@
 //! anything. What they do share sits above this crate, in Typst: the font
 //! measurement pass and the image wrapper.
 
+pub mod matrix;
+pub mod measure;
 pub mod model;
 mod protocol;
+pub mod render;
 pub mod svg;
 pub mod theme;
