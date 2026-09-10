@@ -52,7 +52,9 @@ pub fn display_text(segment: &SegmentSpec) -> String {
         SegmentSpec::ColourField { .. } => String::new(),
         SegmentSpec::Icon { .. } => String::new(),
         SegmentSpec::Block { .. } => String::new(),
+        SegmentSpec::InlineValue { .. } => String::new(),
         SegmentSpec::PixelMatrix { .. } => String::new(),
+        SegmentSpec::Image { .. } => String::new(),
     }
 }
 
@@ -69,7 +71,13 @@ fn nbsp(text: &str) -> String {
 }
 
 fn is_monospace(segment: &SegmentSpec) -> bool {
-    matches!(segment, SegmentSpec::Text { monospace: true, .. })
+    matches!(
+        segment,
+        SegmentSpec::Text {
+            monospace: true,
+            ..
+        }
+    )
 }
 
 /// Advance width of a string at `.blocklyText`'s 11pt.
@@ -97,7 +105,10 @@ pub fn text_width(text: &str, monospace: bool) -> f32 {
     text.chars()
         .map(|ch| {
             let ratio = match ch {
-                ' ' => 0.278,
+                // Fields reach SVG with ordinary spaces converted to NBSPs,
+                // but both glyphs have the normal space advance in the
+                // fallback font metrics.
+                ' ' | '\u{00a0}' => 0.278,
                 'i' | 'l' | 'j' | '.' | ',' | ':' | ';' | '|' | '!' | '\'' => 0.222,
                 'f' | 't' | 'r' | '(' | ')' | '[' | ']' | '/' | '\\' => 0.278,
                 'm' | 'w' => 0.833,
@@ -113,13 +124,27 @@ pub fn text_width(text: &str, monospace: bool) -> f32 {
         .sum()
 }
 
+// The actual notch is 14.5px wide, but its left-side tab reaches six pixels
+// into the field's allocation. Blockly therefore reserves 20.5px before the
+// next field (see an empty `logic_operation`).
+const EMPTY_INLINE_SOCKET_WIDTH: f32 = 20.5;
+// `renderCompute_` gives a connected inline reporter six pixels above and
+// five below its child. This is why a comparison around a 25px sensor is 36px
+// high, and a logical operation around that comparison is 47px high.
+const INLINE_CHILD_TOP: f32 = 6.0;
+const INLINE_CHILD_BOTTOM: f32 = 5.0;
+
 fn field_width(segment: &SegmentSpec) -> f32 {
     match segment {
         // `Blockly.FieldPixelbox` pins its own width regardless of content.
         SegmentSpec::PixelCell { .. } => PIXEL_BOX_SIZE,
-        // `Blockly.FieldColour` keeps the base field's empty text, so the
-        // swatch is only the box padding wide.
-        SegmentSpec::ColourField { .. } => 0.0,
+        // The colour picker has no text, but its painted swatch still needs
+        // a fixed 22px target. `render_field` adds FIELD_BOX_PAD itself.
+        SegmentSpec::ColourField { .. } => COLOUR_FIELD_WIDTH - FIELD_BOX_PAD,
+        SegmentSpec::Image { .. } => 24.0,
+        SegmentSpec::InlineValue { .. } => EMPTY_INLINE_SOCKET_WIDTH,
+        SegmentSpec::Icon { name } if name == "plus" => 16.0,
+        SegmentSpec::Icon { name } if matches!(name.as_str(), "quote_open" | "quote_close") => 12.0,
         other => text_width(&display_text(other), is_monospace(other)),
     }
 }
@@ -130,6 +155,8 @@ pub struct FieldLayout {
     pub x: f32,
     pub y: f32,
     pub width: f32,
+    /// Layout of a reporting block connected to an inline value socket.
+    pub inline_value: Option<Box<BlockLayout>>,
 }
 
 #[derive(Debug, Clone)]
@@ -148,7 +175,7 @@ pub struct RowLayout {
     pub value_origin: (f32, f32),
     pub body: Option<Box<StackLayout>>,
     pub body_origin: (f32, f32),
-    pub check: Option<String>,
+    pub check: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,7 +190,7 @@ pub struct BlockLayout {
     pub has_previous: bool,
     pub has_next: bool,
     pub has_output: bool,
-    pub output_check: Option<String>,
+    pub output_check: Vec<String>,
     pub square_top_left: bool,
     pub square_bottom_left: bool,
     pub category: String,
@@ -217,10 +244,18 @@ pub fn layout_stack(blocks: &[BlockSpec]) -> StackLayout {
         None => 0.0,
     };
 
-    StackLayout { blocks: laid, width, height }
+    StackLayout {
+        blocks: laid,
+        width,
+        height,
+    }
 }
 
-pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: bool) -> BlockLayout {
+pub fn layout_block(
+    block: &BlockSpec,
+    connected_above: bool,
+    connected_below: bool,
+) -> BlockLayout {
     let (has_previous, has_next, has_output) = connections(&block.shape);
 
     let mut right_edge = SEP_SPACE_X * 2.0;
@@ -240,10 +275,11 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
         height: f32,
         field_width: f32,
         widths: Vec<f32>,
+        inline_values: Vec<Option<Box<BlockLayout>>>,
         seps: Vec<f32>,
         value: Option<Box<BlockLayout>>,
         body: Option<Box<StackLayout>>,
-        check: Option<String>,
+        check: Vec<String>,
     }
 
     let mut measured: Vec<Measured> = Vec::new();
@@ -267,6 +303,27 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
         if let Some(stack) = body.as_ref() {
             render_height = render_height.max(stack.height);
         }
+        let has_inline = row
+            .fields
+            .iter()
+            .any(|field| matches!(field, SegmentSpec::InlineValue { .. }));
+        if has_inline {
+            // An empty inline socket is 25px tall with five pixels of air
+            // above and below. The final shadow-pixel adjustment below turns
+            // this 36px intermediate value into Blockly's 35px outline.
+            render_height =
+                render_height.max(FIELD_HEIGHT + INLINE_CHILD_TOP + INLINE_CHILD_BOTTOM + 1.0);
+        }
+        for field in &row.fields {
+            if let SegmentSpec::InlineValue {
+                value: Some(child), ..
+            } = field
+            {
+                let child = layout_block(child, false, false);
+                render_height =
+                    render_height.max(child.own_height() + INLINE_CHILD_TOP + INLINE_CHILD_BOTTOM);
+            }
+        }
 
         // "Blocks have a one pixel shadow that should sometimes overhang."
         let next_is_statement = block
@@ -283,6 +340,7 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
         let mut height = render_height;
         let mut field_width = 0.0f32;
         let mut widths = Vec::with_capacity(row.fields.len());
+        let mut inline_values = Vec::with_capacity(row.fields.len());
         let mut seps = Vec::with_capacity(row.fields.len());
         let mut previous_editable = false;
 
@@ -290,7 +348,16 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
             if position != 0 {
                 field_width += SEP_SPACE_X;
             }
-            let width = field_width_of(field);
+            let inline = match field {
+                SegmentSpec::InlineValue {
+                    value: Some(child), ..
+                } => Some(Box::new(layout_block(child, false, false))),
+                _ => None,
+            };
+            let width = inline
+                .as_ref()
+                .map(|child| child.width)
+                .unwrap_or_else(|| field_width_of(field));
             let sep = if previous_editable && field.is_editable() {
                 SEP_SPACE_X
             } else {
@@ -298,7 +365,11 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
             };
             field_width += width + sep;
             height = height.max(FIELD_HEIGHT);
+            if let Some(child) = inline.as_ref() {
+                height = height.max(child.own_height());
+            }
             widths.push(width);
+            inline_values.push(inline);
             seps.push(sep);
             previous_editable = field.is_editable();
         }
@@ -320,6 +391,7 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
             height,
             field_width,
             widths,
+            inline_values,
             seps,
             value,
             body,
@@ -376,13 +448,25 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
 
         let mut fields = Vec::with_capacity(row.widths.len());
         let mut cursor_x = field_x;
-        let field_y = row_top + INLINE_PADDING_Y;
+        let has_inline = block.rows[index]
+            .fields
+            .iter()
+            .any(|field| matches!(field, SegmentSpec::InlineValue { .. }));
+        let field_y = row_top
+            + if has_inline {
+                // Dropdowns in an inline expression sit at y=10 while their
+                // nested reporters begin at y=6.
+                INLINE_PADDING_Y + INLINE_CHILD_BOTTOM
+            } else {
+                INLINE_PADDING_Y
+            };
         for (position, field_width) in row.widths.iter().enumerate() {
             let sep = row.seps[position];
             fields.push(FieldLayout {
                 x: cursor_x + sep,
                 y: field_y,
                 width: *field_width,
+                inline_value: row.inline_values[position].clone(),
             });
             if *field_width > 0.0 {
                 cursor_x += sep + field_width + SEP_SPACE_X;
@@ -435,7 +519,7 @@ pub fn layout_block(block: &BlockSpec, connected_above: bool, connected_below: b
     // into negative x, and Blockly widens the block to account for it. Parent
     // blocks then subtract it again when they place the child, so leaving it
     // out clips the plug off the right of the page.
-    if has_output && block.check.is_some() {
+    if has_output && !block.check.is_empty() {
         width += TAB_WIDTH;
     }
 
@@ -471,6 +555,12 @@ pub fn collect_texts(blocks: &[BlockSpec], out: &mut std::collections::BTreeSet<
                     out.insert(width_key(&text, is_monospace(field)));
                 }
                 if let SegmentSpec::Block { block } = field {
+                    collect_texts(std::slice::from_ref(block.as_ref()), out);
+                }
+                if let SegmentSpec::InlineValue {
+                    value: Some(block), ..
+                } = field
+                {
                     collect_texts(std::slice::from_ref(block.as_ref()), out);
                 }
             }

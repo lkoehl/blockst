@@ -57,12 +57,18 @@ const W = fixtures.widths;
 const label = (text) => ({ width: W[text], editable: false });
 const dropdown = (text) => ({ width: W[text], editable: true });
 const textField = (text) => ({ width: W[text], editable: true });
-const colourField = () => ({ width: 0, editable: true });
+// FieldColour has no text, but the visual swatch is 22px wide.  The regular
+// field-box padding supplies 10px of that width, leaving twelve pixels of field
+// width for the layout pass.
+const colourField = () => ({ width: 12, editable: true });
 const pixel = () => ({ width: 16, editable: true });
+const icon = () => ({ width: 12, editable: false });
 
 const textBlock = () => ({
   shape: 'value', check: 'String',
-  rows: [{ type: 'dummy', align: 'left', fields: [textField('Hallo')] }],
+  // blocks/text.js places a 12px opening quote image and a matching closing
+  // image around FieldTextInput.
+  rows: [{ type: 'dummy', align: 'left', fields: [icon(), textField('Hallo'), icon()] }],
 });
 
 const colourBlock = () => ({
@@ -86,10 +92,11 @@ const imageBlock = () => {
 };
 
 const BLOCKS = {
-  // mbedControls_start: dummy row, no previous connection.
-  mbedControls_start: () => ({
+  // robControls_start: dummy row, no previous connection. Its two-space
+  // FieldLabel precedes the hidden DEBUG field in the official definition.
+  robControls_start: () => ({
     shape: 'start',
-    rows: [{ type: 'dummy', align: 'left', fields: [label('Start')] }],
+    rows: [{ type: 'dummy', align: 'left', fields: [label('Start'), label('  ')] }],
   }),
   // mbedActions_display_text: appendValueInput('OUT') + two fields.
   mbedActions_display_text: () => ({
@@ -107,16 +114,16 @@ const BLOCKS = {
       fields: [label('Zeige'), dropdown('Text ▾')],
     }],
   }),
-  mbedActions_leds_on: () => ({
+  actions_rgbLed_hidden_on_calliope: () => ({
     shape: 'statement',
     rows: [{
       type: 'value', align: 'left', check: 'Colour',
-      fields: [label('Schalte RGB LED an')],
+      fields: [label('Schalte RGB LED an Farbe')],
       target: colourBlock(),
     }],
   }),
-  // robSensorDefinitions.js: title, port dropdown, "gedrückt?" — Boolean out.
-  robSensors_key_isPressed: () => ({
+  // robSensors.js: title, port dropdown, "gedrückt?" — Boolean out.
+  robSensors_key_getSample: () => ({
     shape: 'value', check: 'Boolean',
     rows: [{
       type: 'dummy', align: 'left',

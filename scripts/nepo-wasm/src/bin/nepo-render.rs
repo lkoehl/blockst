@@ -18,7 +18,9 @@ fn main() {
         Some(json) => json.to_string(),
         None => {
             let mut buffer = String::new();
-            std::io::stdin().read_to_string(&mut buffer).expect("read stdin");
+            std::io::stdin()
+                .read_to_string(&mut buffer)
+                .expect("read stdin");
             buffer
         }
     };

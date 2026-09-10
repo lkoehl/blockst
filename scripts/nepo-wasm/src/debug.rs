@@ -13,8 +13,8 @@ pub struct Node {
     pub id: String,
     pub shape: String,
     pub category: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub check: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub check: Vec<String>,
     pub rows: Vec<Row>,
 }
 
@@ -22,8 +22,8 @@ pub struct Node {
 pub struct Row {
     pub kind: String,
     pub fields: Vec<Field>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub check: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub check: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<Box<Node>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -45,12 +45,23 @@ pub enum Field {
     Matrix { rows: Vec<String> },
     #[serde(rename = "pixel")]
     Pixel { value: String },
+    #[serde(rename = "image")]
+    Image { value: String },
+    #[serde(rename = "inline_value")]
+    InlineValue {
+        check: Vec<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<Box<Node>>,
+    },
     #[serde(rename = "other")]
     Other,
 }
 
 pub fn describe(scripts: &[Vec<BlockSpec>]) -> Vec<Vec<Node>> {
-    scripts.iter().map(|blocks| describe_stack(blocks)).collect()
+    scripts
+        .iter()
+        .map(|blocks| describe_stack(blocks))
+        .collect()
 }
 
 fn describe_stack(blocks: &[BlockSpec]) -> Vec<Node> {
@@ -79,12 +90,29 @@ fn describe_block(block: &BlockSpec) -> Node {
 
 fn describe_field(field: &SegmentSpec) -> Field {
     match field {
-        SegmentSpec::Text { value, .. } => Field::Text { value: value.clone() },
-        SegmentSpec::Dropdown { value } => Field::Dropdown { value: value.clone() },
-        SegmentSpec::Input { value } => Field::Input { value: value.clone() },
-        SegmentSpec::ColourField { colour } => Field::Colour { value: colour.clone() },
+        SegmentSpec::Text { value, .. } => Field::Text {
+            value: value.clone(),
+        },
+        SegmentSpec::Dropdown { value } => Field::Dropdown {
+            value: value.clone(),
+        },
+        SegmentSpec::Input { value } => Field::Input {
+            value: value.clone(),
+        },
+        SegmentSpec::ColourField { colour } => Field::Colour {
+            value: colour.clone(),
+        },
         SegmentSpec::PixelMatrix { rows } => Field::Matrix { rows: rows.clone() },
-        SegmentSpec::PixelCell { value } => Field::Pixel { value: value.clone() },
+        SegmentSpec::PixelCell { value } => Field::Pixel {
+            value: value.clone(),
+        },
+        SegmentSpec::Image { value } => Field::Image {
+            value: value.clone(),
+        },
+        SegmentSpec::InlineValue { check, value } => Field::InlineValue {
+            check: check.clone(),
+            value: value.as_ref().map(|block| Box::new(describe_block(block))),
+        },
         _ => Field::Other,
     }
 }

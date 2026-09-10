@@ -82,7 +82,11 @@ fn is_closer(text: &str) -> bool {
     )
 }
 
-pub fn parse(code: &str, language_code: &str, platform: &str) -> Result<Vec<Vec<BlockSpec>>, String> {
+pub fn parse(
+    code: &str,
+    language_code: &str,
+    platform: &str,
+) -> Result<Vec<Vec<BlockSpec>>, String> {
     let catalog = catalog::catalog();
     let language = catalog
         .languages
@@ -139,28 +143,70 @@ fn parse_stack(
         }
 
         *index += 1;
-        let (id, mut bindings) = match_line(&line.text, language, platform)
+        let (mut id, mut bindings) = match_line(&line.text, language, platform)
             .ok_or_else(|| unknown_line_error(line, language, platform))?;
 
         // Anything indented further belongs in this block's mouth.
-        let child_indent = lines
-            .get(*index)
-            .filter(|next| next.indent > line.indent)
-            .map(|next| next.indent);
-        let statement_field = statement_field_of(&id, language);
+        let child_indent = indented_after(lines, *index, line.indent);
+        let mut mouths = statement_fields_of(&id, language);
         let mut continuation = Vec::new();
+        let mut filled = 0usize;
+
         if let Some(child_indent) = child_indent {
             let nested = parse_stack(lines, index, child_indent, language, platform)?;
-            match &statement_field {
+            match mouths.first() {
                 // A block with a mouth swallows what is indented under it.
-                Some(name) => {
+                Some((name, _)) => {
                     bindings.insert(name.clone(), Binding::Statement(nested));
+                    filled = 1;
                 }
                 // Everything else reads the indent as "these follow me", which
                 // is how the Start block is written in teaching material even
                 // though NEPO gives it no mouth.
                 None => continuation = nested,
             }
+        } else if !mouths.is_empty() {
+            filled = 1;
+        }
+
+        // `robControls_if` and `robControls_ifElse` share the same header
+        // (`wenn %IF0`). The otherwise optional `sonst` line disambiguates
+        // them only after the first mouth has been read. Upgrade the base if
+        // block at that point, retaining its already-parsed DO0 body.
+        if id == "robControls_if" {
+            let if_else_mouths = statement_fields_of("robControls_ifElse", language);
+            let has_else = if_else_mouths
+                .get(1)
+                .and_then(|(_, label)| label.as_deref())
+                .and_then(|label| lines.get(*index).map(|next| (label, next)))
+                .map(|(label, next)| {
+                    next.indent == line.indent && next.text.eq_ignore_ascii_case(label)
+                })
+                .unwrap_or(false);
+            if has_else {
+                id = "robControls_ifElse".to_string();
+                mouths = if_else_mouths;
+            }
+        }
+
+        // A second mouth is introduced by its own label, at the header's
+        // indent — "sonst" for robControls_ifElse. The keyword is not
+        // hard-coded: it is the literal that opens that row in the locale, so
+        // a translation gets it for free.
+        while filled < mouths.len() {
+            let (name, label) = &mouths[filled];
+            let Some(label) = label.as_deref() else { break };
+            let Some(next) = lines.get(*index) else { break };
+            if next.indent != line.indent || !next.text.eq_ignore_ascii_case(label) {
+                break;
+            }
+            *index += 1;
+            let body = match indented_after(lines, *index, line.indent) {
+                Some(inner) => parse_stack(lines, index, inner, language, platform)?,
+                None => Vec::new(),
+            };
+            bindings.insert(name.clone(), Binding::Statement(body));
+            filled += 1;
         }
 
         blocks.push(catalog::build_block(&id, language, &bindings)?);
@@ -187,15 +233,43 @@ fn unknown_line_error(line: &Line, language: &Language, platform: &str) -> Strin
     )
 }
 
-fn statement_field_of(id: &str, language: &Language) -> Option<String> {
-    let def = catalog::catalog().blocks.get(id)?;
-    let pattern = language.specs.get(id)?;
-    pattern.fields().into_iter().find_map(|name| {
-        def.fields
-            .get(name)
-            .filter(|field| field.kind == "statement")
-            .map(|_| name.to_string())
-    })
+fn indented_after(lines: &[Line], index: usize, indent: usize) -> Option<usize> {
+    lines
+        .get(index)
+        .filter(|next| next.indent > indent)
+        .map(|next| next.indent)
+}
+
+/// Every mouth the block has, in reading order, each with the label that opens
+/// its row. The label is what a source file writes to start that mouth.
+fn statement_fields_of(id: &str, language: &Language) -> Vec<(String, Option<String>)> {
+    let Some(def) = catalog::catalog().blocks.get(id) else {
+        return Vec::new();
+    };
+    let Some(pattern) = language.specs.get(id) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for row in &pattern.rows {
+        let label = row.iter().find_map(|token| match token {
+            Token::Literal(text) => Some(text.clone()),
+            _ => None,
+        });
+        for token in row {
+            if let Token::Field(name) = token {
+                let is_statement = def
+                    .fields
+                    .get(name)
+                    .map(|field| field.kind == "statement")
+                    .unwrap_or(false);
+                if is_statement {
+                    out.push((name.clone(), label.clone()));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Tokens a source line is expected to supply: everything except the rows that
@@ -244,7 +318,8 @@ fn match_line(
     for (id, pattern, canonical) in candidates(language, platform) {
         let tokens = parse_tokens(pattern, id);
         let mut bindings = HashMap::new();
-        if let Some(consumed) = match_tokens(&tokens, text, 0, id, language, platform, &mut bindings)
+        if let Some(consumed) =
+            match_tokens(&tokens, text, 0, id, language, platform, &mut bindings)
         {
             if text[consumed..].trim().is_empty() {
                 let score = tokens.len();
@@ -295,12 +370,20 @@ fn match_tokens(
             }
             Token::Field(name) => {
                 let field = def.fields.get(name)?;
+                // A spacer is pure layout: Open Roberta paints it, nobody
+                // types it.
+                if matches!(field.kind.as_str(), "spacer" | "icon") {
+                    continue;
+                }
                 let matched = match field.kind.as_str() {
-                    "dropdown" => match_dropdown(text, pos, id, name, language),
+                    "dropdown" | "mode" | "image" => match_dropdown(text, pos, id, name, language),
                     "text" => match_text(text, pos),
+                    "number" => match_number(text, pos),
                     "colour" => match_colour(text, pos),
                     "matrix" => match_matrix(text, pos),
-                    "value" => match_value(text, pos, language, platform),
+                    "value" | "inline_value" => {
+                        match_value(text, pos, language, platform, inline_budget(id))
+                    }
                     _ => return None,
                 };
                 match matched {
@@ -311,7 +394,7 @@ fn match_tokens(
                     // An empty socket is a legitimate thing to write: it is how
                     // a worksheet shows which type belongs in a hole. Every
                     // other field kind has to match.
-                    None if field.kind == "value" => {}
+                    None if matches!(field.kind.as_str(), "value" | "inline_value") => {}
                     None => return None,
                 }
             }
@@ -319,6 +402,17 @@ fn match_tokens(
     }
 
     Some(pos)
+}
+
+/// The small expression-precedence ladder in the beginner toolbox. A
+/// comparison/arithmetic block consumes plain values; a logical operation may
+/// consume comparisons, but not another operation as its first operand.
+fn inline_budget(id: &str) -> u8 {
+    match id {
+        "math_arithmetic" | "logic_compare" => 0,
+        "logic_operation" => 1,
+        _ => 2,
+    }
 }
 
 /// Case-insensitive literal match that is safe on multi-byte characters and
@@ -338,7 +432,11 @@ fn match_literal(text: &str, pos: usize, literal: &str) -> Option<usize> {
                 return None;
             }
             cursor = skipped;
-            while expected.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
+            while expected
+                .peek()
+                .map(|ch| ch.is_whitespace())
+                .unwrap_or(false)
+            {
                 expected.next();
             }
             continue;
@@ -388,6 +486,29 @@ fn match_text(text: &str, pos: usize) -> Option<(Binding, usize)> {
     ))
 }
 
+/// A bare numeric literal, as `math_number` is written: `500`, `-3`, `0.5`.
+fn match_number(text: &str, pos: usize) -> Option<(Binding, usize)> {
+    let rest = &text[pos..];
+    let mut end = 0;
+    let mut seen_digit = false;
+    let mut seen_dot = false;
+
+    for (offset, ch) in rest.char_indices() {
+        match ch {
+            '-' | '+' if offset == 0 => {}
+            '.' if !seen_dot && seen_digit => seen_dot = true,
+            c if c.is_ascii_digit() => seen_digit = true,
+            _ => break,
+        }
+        end = offset + ch.len_utf8();
+    }
+
+    if !seen_digit {
+        return None;
+    }
+    Some((Binding::Number(rest[..end].to_string()), pos + end))
+}
+
 fn match_colour(text: &str, pos: usize) -> Option<(Binding, usize)> {
     let rest = &text[pos..];
     if !rest.starts_with('#') {
@@ -414,7 +535,10 @@ fn match_matrix(text: &str, pos: usize) -> Option<(Binding, usize)> {
     if rows.len() != crate::matrix::SIZE {
         return None;
     }
-    if rows.iter().any(|row| row.chars().count() != crate::matrix::SIZE) {
+    if rows
+        .iter()
+        .any(|row| row.chars().count() != crate::matrix::SIZE)
+    {
         return None;
     }
     Some((Binding::Matrix(rows), pos + end))
@@ -426,20 +550,21 @@ fn match_value(
     pos: usize,
     language: &Language,
     platform: &str,
+    inline_budget: u8,
 ) -> Option<(Binding, usize)> {
     let rest = &text[pos..];
 
     if rest.starts_with('(') {
         let close = find_closing(rest)?;
         let inner = &rest[1..close];
-        let (block, consumed) = match_value_body(inner, 0, language, platform)?;
+        let (block, consumed) = match_value_body(inner, 0, language, platform, inline_budget)?;
         if inner[consumed..].trim().is_empty() {
             return Some((Binding::Value(block), pos + close + 1));
         }
         return None;
     }
 
-    let (block, consumed) = match_value_body(text, pos, language, platform)?;
+    let (block, consumed) = match_value_body(text, pos, language, platform, inline_budget)?;
     Some((Binding::Value(block), consumed))
 }
 
@@ -465,6 +590,7 @@ fn match_value_body(
     pos: usize,
     language: &Language,
     platform: &str,
+    inline_budget: u8,
 ) -> Option<(BlockSpec, usize)> {
     let mut best: Option<(usize, BlockSpec)> = None;
 
@@ -474,11 +600,22 @@ fn match_value_body(
             continue;
         }
         let tokens = parse_tokens(pattern, id);
+        // Inline reporter patterns cannot recurse into themselves as their
+        // first operand. The budget encodes raw values -> comparisons ->
+        // logical operations and removes the ambiguity without flat greed.
+        let leading_inline = matches!(tokens.first(), Some(Token::Field(name)) if def.fields.get(name).map(|field| field.kind == "inline_value").unwrap_or(false));
+        if leading_inline && (inline_budget == 0 || (inline_budget == 1 && id == "logic_operation"))
+        {
+            continue;
+        }
         let mut bindings = HashMap::new();
         if let Some(consumed) =
             match_tokens(&tokens, text, pos, id, language, platform, &mut bindings)
         {
-            let longest = best.as_ref().map(|(best, _)| consumed > *best).unwrap_or(true);
+            let longest = best
+                .as_ref()
+                .map(|(best, _)| consumed > *best)
+                .unwrap_or(true);
             if longest {
                 if let Ok(block) = catalog::build_block(id, language, &bindings) {
                     best = Some((consumed, block));
@@ -540,8 +677,8 @@ pub fn extract_texts(input: &str) -> Result<String, String> {
 
 /// The parsed structure, for tests and for callers that want the AST.
 pub fn parse_request(input: &str) -> Result<String, String> {
-    let request: Request = serde_json::from_str(input)
-        .map_err(|err| format!("nepo: invalid parse request: {err}"))?;
+    let request: Request =
+        serde_json::from_str(input).map_err(|err| format!("nepo: invalid parse request: {err}"))?;
     let scripts = parse(&request.code, &request.language, &request.platform)?;
     serde_json::to_string(&crate::debug::describe(&scripts))
         .map_err(|err| format!("nepo: failed to encode parse result: {err}"))

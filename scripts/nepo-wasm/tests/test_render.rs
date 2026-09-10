@@ -47,7 +47,9 @@ fn the_svg_carries_no_invalid_measurements() {
 #[test]
 fn no_placeholder_survives_into_the_output() {
     let svg = render(PROGRAM);
-    for name in ["%TYPE", "%OUT", "%COLOR", "%VALUE", "%DO", "%PICTURE", "%TEXT"] {
+    for name in [
+        "%TYPE", "%OUT", "%COLOR", "%VALUE", "%DO", "%PICTURE", "%TEXT",
+    ] {
         assert!(!svg.contains(name), "unresolved placeholder {name}");
     }
 }
@@ -66,7 +68,10 @@ fn the_svg_is_balanced() {
         "unbalanced text elements"
     );
     // Self-closing elements must actually close.
-    assert_eq!(svg.matches("<path").count(), svg.matches("/>").count() - svg.matches("<rect").count());
+    assert_eq!(
+        svg.matches("<path").count(),
+        svg.matches("/>").count() - svg.matches("<rect").count()
+    );
 }
 
 #[test]
@@ -99,16 +104,22 @@ fn a_typed_plug_takes_the_colour_of_its_data_type() {
 }
 
 #[test]
-fn an_empty_socket_is_traced_in_its_type_colour() {
-    let svg = render("Zeige Text");
+fn empty_single_type_sockets_are_traced_in_their_type_colour() {
+    let svg = render("Warte ms");
     assert!(
-        svg.contains("stroke=\"#BACC1E\""),
-        "empty String socket should be outlined in the String colour"
+        svg.contains("stroke=\"#005A94\""),
+        "empty Number socket should be outlined in the Number colour"
     );
-    let filled = render("Zeige Text \"Hallo\"");
+    let filled = render("Warte ms 500");
     assert!(
-        !filled.contains("stroke=\"#BACC1E\""),
+        !filled.contains("stroke=\"#005A94\""),
         "a filled socket needs no type hint"
+    );
+
+    let multi_type = render("Zeige Text");
+    assert!(
+        !multi_type.contains("stroke=\"#BACC1E\""),
+        "a Number/Boolean/String socket must not claim to be String-only"
     );
 }
 
@@ -126,7 +137,10 @@ fn the_print_theme_outlines_instead_of_filling() {
     let svg = render_with(PROGRAM, "print");
     assert!(svg.contains("fill=\"#ffffff\""));
     assert!(svg.contains("stroke=\"#000000\""));
-    assert!(!svg.contains("fill=\"#F29400\""), "colour survived into print");
+    assert!(
+        !svg.contains("fill=\"#F29400\""),
+        "colour survived into print"
+    );
 }
 
 #[test]
@@ -138,11 +152,49 @@ fn every_prototype_block_renders() {
         "Taste A gedrückt?",
         "Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\nEnde",
         "Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)",
+        "Lösche Bildschirm",
+        "Schalte RGB LED aus",
+        "Wiederhole 3 mal\n  Warte ms 500\nEnde",
+        "Warte bis Taste A gedrückt?",
+        "wenn wahr\n  Lösche Bildschirm\nsonst\n  Schalte RGB LED aus\nEnde",
     ] {
         let svg = render(source);
         assert!(svg.len() > 200, "suspiciously small output for {source:?}");
         assert!(svg.contains("<path"), "no outline for {source:?}");
     }
+}
+
+#[test]
+fn inline_sockets_and_predefined_images_render() {
+    let svg = render("Warte ms 1 +\nWarte bis Taste A gedrückt? und wahr\nZeige Bild Herz");
+    // Empty inline sockets have their own rounded outline, and a selected
+    // image is a compact 5x5 LED preview rather than a text-only dropdown.
+    assert!(svg.contains("stroke=\"#005A94\""), "number socket missing");
+    assert!(svg.matches("width=\"3\" height=\"3\"").count() >= 10);
+}
+
+#[test]
+fn connected_inline_reporters_knock_a_border_out_of_the_parent() {
+    let svg = render("Warte bis gib Wert % Lichtsensor < 50 und gib Wert % Lichtsensor ≤ 100");
+    assert!(
+        svg.contains("fill-rule=\"evenodd\""),
+        "inline children must cut a transparent contour from their parent"
+    );
+    // The two child comparisons each add a path starting at their own slot.
+    let all_paths = paths(&svg);
+    assert!(
+        all_paths.iter().any(|path| path.matches("M ").count() >= 2),
+        "no recursively knocked-out reporter path: {all_paths:?}"
+    );
+}
+
+#[test]
+fn colour_picker_keeps_a_useful_fixed_width() {
+    let svg = render("Schalte RGB LED an (#ff0000)");
+    assert!(
+        svg.contains("width=\"22\" height=\"16\""),
+        "the colour reporter should paint a 22px swatch"
+    );
 }
 
 #[test]
@@ -167,7 +219,12 @@ fn text_measurements_from_the_host_are_used() {
     });
     let wide = parser::render_request(&request.to_string()).expect("render");
     assert_ne!(plain, wide, "supplied widths were ignored");
-    assert!(wide.contains("H 420"), "block should grow to fit the label");
+    // The official start block also has its two-space layout field before
+    // the hidden DEBUG field: 400 + 10 separator + 8.155 space width + 20.
+    assert!(
+        wide.contains("H 438.155"),
+        "block should grow to fit the label"
+    );
 }
 
 /// Pull the numeric tokens out of path data the way an SVG parser would:
@@ -210,7 +267,9 @@ fn paths(svg: &str) -> Vec<String> {
     let mut rest = svg;
     while let Some(start) = rest.find("<path d=\"") {
         let from = start + "<path d=\"".len();
-        let Some(end) = rest[from..].find('"') else { break };
+        let Some(end) = rest[from..].find('"') else {
+            break;
+        };
         out.push(rest[from..from + end].to_string());
         rest = &rest[from + end..];
     }

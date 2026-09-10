@@ -18,14 +18,13 @@ use nepo_wasm::{matrix, parser};
 use std::collections::HashMap;
 
 fn references_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../examples/nepo/references")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/nepo/references")
 }
 
 fn load(name: &str) -> serde_json::Value {
     let path = references_dir().join(name);
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     serde_json::from_str(&text).unwrap_or_else(|err| panic!("{}: {err}", path.display()))
 }
 
@@ -64,8 +63,8 @@ fn geometry_matches_the_blockly_reference() {
             None => continue,
         };
 
-        let scripts = parser::parse(source, "de", "calliope")
-            .unwrap_or_else(|err| panic!("{id}: {err}"));
+        let scripts =
+            parser::parse(source, "de", "calliope").unwrap_or_else(|err| panic!("{id}: {err}"));
         let mut blocks = scripts.into_iter().next().expect("one script");
         for block in blocks.iter_mut() {
             matrix::expand(block);

@@ -25,9 +25,9 @@ fn text_maps_to_the_right_block() {
     assert_eq!(
         ids,
         vec![
-            "mbedControls_start",
+            "robControls_start",
             "mbedActions_display_text",
-            "mbedActions_leds_on"
+            "actions_rgbLed_hidden_on_calliope"
         ]
     );
 }
@@ -54,14 +54,15 @@ fn an_unspecified_dropdown_takes_the_first_option() {
 #[test]
 fn a_sensor_block_reports_a_boolean() {
     let script = blocks("Taste A gedrückt?");
-    assert_eq!(script[0]["id"], "robSensors_key_isPressed");
+    assert_eq!(script[0]["id"], "robSensors_key_getSample");
     assert_eq!(script[0]["shape"], "value");
-    assert_eq!(script[0]["check"], "Boolean");
+    assert_eq!(script[0]["check"], serde_json::json!(["Boolean"]));
 }
 
 #[test]
 fn a_control_block_takes_nested_statements() {
-    let script = blocks("Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\n  Zeige Text \"Welt\"\nEnde");
+    let script =
+        blocks("Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\n  Zeige Text \"Welt\"\nEnde");
     let rows = script[0]["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 2, "title row plus a mouth");
     assert_eq!(rows[1]["kind"], "statement");
@@ -82,25 +83,37 @@ fn a_value_block_plugs_into_the_socket() {
     let script = blocks("Zeige Text \"Hallo\"");
     let row = &script[0]["rows"][0];
     assert_eq!(row["kind"], "value");
-    assert_eq!(row["check"], "String");
-    assert_eq!(row["value"]["id"], "text_text");
-    let field = &row["value"]["rows"][0]["fields"][0];
+    assert_eq!(
+        row["check"],
+        serde_json::json!(["Number", "Boolean", "String"])
+    );
+    assert_eq!(row["value"]["id"], "text");
+    let field = row["value"]["rows"][0]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["kind"] == "input")
+        .expect("text input");
     assert_eq!(field["kind"], "input");
     assert_eq!(field["value"], "Hallo");
 }
 
 #[test]
-fn an_empty_socket_keeps_its_type() {
+fn an_empty_multi_type_socket_stays_untyped() {
     let script = blocks("Zeige Text");
     let row = &script[0]["rows"][0];
-    assert_eq!(row["check"], "String");
+    assert_eq!(
+        row["check"],
+        serde_json::json!(["Number", "Boolean", "String"])
+    );
     assert!(row.get("value").is_none(), "socket should be empty");
 }
 
 #[test]
 fn aliases_parse_but_print_open_robertas_wording() {
-    let script = blocks("Programmstart\n  Wiederhole fortlaufend\n    Zeige Text \"Hallo\"\n  Ende");
-    assert_eq!(script[0]["id"], "mbedControls_start");
+    let script =
+        blocks("Programmstart\n  Wiederhole fortlaufend\n    Zeige Text \"Hallo\"\n  Ende");
+    assert_eq!(script[0]["id"], "robControls_start");
     assert_eq!(script[0]["rows"][0]["fields"][0]["value"], "Start");
 
     assert_eq!(script[1]["id"], "robControls_loopForever");
@@ -155,12 +168,12 @@ fn a_start_block_opens_a_new_script() {
 fn an_unknown_line_names_the_blocks_that_do_exist() {
     let error = parser::parse("Fliege zum Mond", "de", "calliope").unwrap_err();
     assert!(error.contains("line 1"), "{error}");
-    assert!(error.contains("mbedControls_start"), "{error}");
+    assert!(error.contains("robControls_start"), "{error}");
 }
 
 #[test]
 fn a_block_the_platform_does_not_offer_is_rejected() {
-    // mbedActions_leds_on is Calliope-only; the micro:bit has no RGB LED.
+    // The Calliope's built-in RGB LED is not in the micro:bit toolbox.
     assert!(parser::parse("Schalte RGB LED an (#ff0000)", "de", "calliope").is_ok());
     let error = parser::parse("Schalte RGB LED an (#ff0000)", "de", "microbit").unwrap_err();
     assert!(error.contains("microbit"), "{error}");
@@ -182,6 +195,146 @@ fn english_renders_the_english_wording() {
     });
     let json = parser::parse_request(&request.to_string()).expect("parse");
     let scripts: Value = serde_json::from_str(&json).unwrap();
-    assert_eq!(scripts[0][0]["rows"][0]["fields"][0]["value"], "Start");
-    assert_eq!(scripts[0][1]["rows"][0]["fields"][0]["value"], "Show");
+    assert_eq!(scripts[0][0]["rows"][0]["fields"][0]["value"], "start");
+    assert_eq!(scripts[0][1]["rows"][0]["fields"][0]["value"], "show");
+}
+
+#[test]
+fn the_extended_beginner_control_set_parses_with_its_real_ids() {
+    let script = blocks(
+        "Wiederhole 3 mal\n  Warte ms 500\nEnde\nWarte bis Taste A gedrückt?\nwenn wahr\n  Lösche Bildschirm\nsonst\n  Schalte RGB LED aus\nEnde",
+    );
+    let ids: Vec<&str> = script
+        .iter()
+        .map(|block| block["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            "controls_repeat_ext",
+            "robControls_wait_for",
+            "robControls_ifElse",
+        ]
+    );
+
+    let repeat_value = &script[0]["rows"][0]["value"];
+    assert_eq!(repeat_value["id"], "math_number");
+    assert_eq!(repeat_value["rows"][0]["fields"][0]["value"], "3");
+    assert_eq!(
+        script[1]["rows"][0]["value"]["id"],
+        "robSensors_key_getSample"
+    );
+
+    let branches = &script[2]["rows"];
+    assert_eq!(branches[1]["body"][0]["id"], "mbedActions_display_clear");
+    assert_eq!(
+        branches[2]["body"][0]["id"],
+        "actions_rgbLed_hidden_off_calliope"
+    );
+}
+
+#[test]
+fn boolean_literals_are_localised_reporting_blocks() {
+    let de = blocks("Warte bis falsch");
+    assert_eq!(de[0]["rows"][0]["value"]["id"], "logic_boolean");
+    assert_eq!(
+        de[0]["rows"][0]["value"]["rows"][0]["fields"][0]["value"],
+        "falsch"
+    );
+
+    let request = serde_json::json!({
+        "code": "wait until true",
+        "language": "en",
+        "platform": "calliope",
+    });
+    let json = parser::parse_request(&request.to_string()).expect("parse");
+    let scripts: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(scripts[0][0]["rows"][0]["value"]["id"], "logic_boolean");
+}
+
+#[test]
+fn inline_value_sockets_compose_math_and_logic_blocks() {
+    let script = blocks(
+        "Warte ms 1 + 2\nWarte bis Taste A gedrückt? und wahr\nwenn 3 ≤ 4\n  Lösche Bildschirm\nEnde\nganzzahliger Zufallswert zwischen 1 bis 10",
+    );
+
+    let arithmetic = &script[0]["rows"][0]["value"];
+    assert_eq!(arithmetic["id"], "math_arithmetic");
+    assert_eq!(arithmetic["rows"][0]["fields"][0]["kind"], "inline_value");
+    assert_eq!(
+        arithmetic["rows"][0]["fields"][0]["value"]["id"],
+        "math_number"
+    );
+    assert_eq!(arithmetic["rows"][0]["fields"][1]["value"], "+");
+
+    let operation = &script[1]["rows"][0]["value"];
+    assert_eq!(operation["id"], "logic_operation");
+    assert_eq!(
+        operation["rows"][0]["fields"][0]["value"]["id"],
+        "robSensors_key_getSample"
+    );
+    assert_eq!(script[2]["rows"][0]["value"]["id"], "logic_compare");
+    assert_eq!(script[3]["id"], "math_random_int");
+}
+
+#[test]
+fn beginner_sensors_and_io_blocks_keep_their_official_ids() {
+    let script = blocks(
+        "Pin 2 gedrückt?\ngib geschüttelt Lage\ngib Winkel ° Kompasssensor\ngib Wert % Mikrofon\ngib Wert ms Zeitgeber 1\ngib Wert ° Temperatursensor\ngib Wert % Lichtsensor\nSetze Zeitgeber 1 zurück\nSpiele Viertelnote C4\nZeige Bild Herz\nKommentar \"Notiz\"",
+    );
+    let ids: Vec<&str> = script
+        .iter()
+        .map(|block| block["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            "robSensors_pintouch_getSample",
+            "robSensors_gesture_getSample",
+            "robSensors_compass_getSample",
+            "robSensors_sound_getSample",
+            "robSensors_timer_getSample",
+            "robSensors_temperature_getSample",
+            "robSensors_light_getSample",
+            "mbedSensors_timer_reset",
+            "mbedActions_play_note",
+            "mbedActions_display_image",
+            "text_comment",
+        ]
+    );
+    let image = &script[9]["rows"][0]["value"];
+    assert_eq!(image["id"], "mbedImage_get_image");
+    assert_eq!(image["rows"][0]["fields"][0]["kind"], "image");
+    assert_eq!(script[3]["rows"][0]["fields"][1]["kind"], "input");
+    assert_eq!(script[3]["rows"][0]["fields"][1]["value"], "Wert");
+}
+
+#[test]
+fn nested_conditions_from_the_visual_reference_parse_as_a_tree() {
+    let script = blocks(
+        "Wiederhole unendlich oft\n  wenn gib Wert % Lichtsensor < 50 und gib Wert % Lichtsensor ≤ 100\n    Zeige Text \"T\"\n  sonst\n    wenn gib Wert % Lichtsensor < 20 und gib Wert % Lichtsensor ≤ 50\n      Zeige Text \"D\"\n    sonst\n      Zeige Text \"N\"",
+    );
+    assert_eq!(script[0]["id"], "robControls_loopForever");
+    let outer_if = &script[0]["rows"][1]["body"][0];
+    assert_eq!(outer_if["id"], "robControls_ifElse");
+    assert_eq!(outer_if["rows"][0]["value"]["id"], "logic_operation");
+    assert_eq!(
+        outer_if["rows"][0]["value"]["rows"][0]["fields"][0]["value"]["id"],
+        "logic_compare"
+    );
+    assert_eq!(outer_if["rows"][2]["body"][0]["id"], "robControls_ifElse");
+}
+
+#[test]
+fn while_loops_and_sound_mode_match_the_lesson_examples() {
+    let script = blocks("Wiederhole solange Taste A gedrückt?\n  gib Geräusch % Mikrofon\nEnde");
+    assert_eq!(script[0]["id"], "controls_whileUntil");
+    assert_eq!(script[0]["rows"][0]["fields"][1]["value"], "solange");
+    assert_eq!(
+        script[0]["rows"][0]["value"]["id"],
+        "robSensors_key_getSample"
+    );
+    let sound = &script[0]["rows"][1]["body"][0];
+    assert_eq!(sound["id"], "robSensors_sound_getSample");
+    assert_eq!(sound["rows"][0]["fields"][1]["value"], "Geräusch");
 }

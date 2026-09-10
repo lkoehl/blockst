@@ -5,22 +5,25 @@ block sets. Separate from `scratchblocks-wasm`: the two dialects disagree about
 notches, corner radii and what a block is even made of, so they share a Typst
 front end and nothing below it.
 
-Status: prototype. Six blocks, static rendering only. No execution, no
-simulation, no mutators.
+Status: static renderer with a growing core set from the Calliope mini and
+micro:bit beginner toolboxes. No execution or simulation. Blocks with Open
+Roberta plus-mutators render in their initial form; extra mutator branches are
+not yet represented.
 
 ## Blocks
 
-| Catalog id | German | Shape | Category |
-|---|---|---|---|
-| `mbedControls_start` | Start | start | activity `#E2001A` |
-| `mbedActions_display_text` | Zeige Text … | statement | action `#F29400` |
-| `mbedActions_leds_on` | Schalte RGB LED an … | statement | action `#F29400` |
-| `robSensors_key_isPressed` | Taste … gedrückt? | value → Boolean | sensor `#8FA402` |
-| `robControls_loopForever` | Wiederhole unendlich oft | statement + mouth | control `#EB6A0A` |
-| `mbedActions_display_image` | Zeige Bild … | statement | action `#F29400` |
+| Group | Catalog ids | German surface syntax |
+|---|---|---|
+| Start | `robControls_start` | `Start` |
+| Display & sound | `mbedActions_display_text`, `mbedActions_display_image`, `mbedActions_display_clear`, `mbedActions_play_note` | `Zeige Text …`, `Zeige Bild …`, `Lösche Bildschirm`, `Spiele Viertelnote C4` |
+| Calliope RGB LED | `actions_rgbLed_hidden_on_calliope`, `actions_rgbLed_hidden_off_calliope` | `Schalte RGB LED an Farbe …`, `Schalte RGB LED aus` |
+| Sensor | `robSensors_key_getSample`, `robSensors_pintouch_getSample`, `robSensors_gesture_getSample`, `robSensors_compass_getSample`, `robSensors_sound_getSample`, `robSensors_timer_getSample`, `robSensors_temperature_getSample`, `robSensors_light_getSample`, `mbedSensors_timer_reset` | `Taste A gedrückt?`, `Pin 0 gedrückt?`, `gib …`, `Setze Zeitgeber 1 zurück` |
+| Control | `robControls_loopForever`, `controls_repeat_ext`, `robControls_if`, `robControls_ifElse`, `robControls_wait_time`, `robControls_wait_for` | `Wiederhole … mal`, `wenn …`, `Warte ms …`, `Warte bis …` |
+| Logic & math | `logic_boolean`, `logic_compare`, `logic_operation`, `math_number`, `math_arithmetic`, `math_random_int` | `wahr`, `1 + 2`, `Taste A gedrückt? und wahr`, `1 ≤ 2`, `ganzzahliger Zufallswert zwischen 1 bis 10` |
+| Text, colour & image reporters | `text`, `text_comment`, `mbedColour_picker`, `mbedImage_image`, `mbedImage_get_image` | quoted text, `Kommentar "Notiz"`, colours, editable 5×5 LED matrices, `Herz`/`Lächeln`/… |
 
-Plus the reporting blocks they plug into: `text_text`, `mbedColour_picker` and
-`mbedImage_image` (the 5×5 LED matrix).
+The parser continues to accept the prototype's shorter RGB-LED wording
+(`Schalte RGB LED an …`) and renders Open Roberta's canonical `Farbe` label.
 
 ## Where the numbers come from
 
@@ -58,7 +61,10 @@ data/
 ```
 
 Adding a block normally means adding one entry to `blocks.toml` and one line
-per locale. Five of the six blocks above need nothing else.
+per locale. Inline value fields (`inline_value`) let reporter blocks compose
+within one row; the renderer uses a typed rounded socket when they are empty.
+`mbedImage_get_image` is deliberately self-contained: it renders its compact
+5×5 preview instead of depending on Open Roberta's PNG asset bundle.
 
 ## Build
 

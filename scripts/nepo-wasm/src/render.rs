@@ -3,7 +3,7 @@
 
 use crate::matrix;
 use crate::measure::{self, BlockLayout, StackLayout};
-use crate::model::{BlockSpec, DocumentSpec, SegmentSpec};
+use crate::model::{single_check, BlockSpec, DocumentSpec, SegmentSpec};
 use crate::svg::*;
 use crate::theme::{colours_for, connection_colour};
 
@@ -31,7 +31,11 @@ pub fn render_document(document: &DocumentSpec) -> String {
         // A value block's plug hangs into negative x. Shifting the script
         // right by one tab keeps it inside the viewBox; the width already
         // includes the tab, so it must not be added a second time.
-        let offset_x = if starts_with_output(&layout) { TAB_WIDTH } else { 0.0 };
+        let offset_x = if starts_with_output(&layout) {
+            TAB_WIDTH
+        } else {
+            0.0
+        };
 
         body.push_str(&format!(
             "<g transform=\"translate({} {})\">{}</g>",
@@ -66,7 +70,11 @@ pub fn render_document(document: &DocumentSpec) -> String {
 }
 
 fn starts_with_output(stack: &StackLayout) -> bool {
-    stack.blocks.first().map(|(_, b)| b.has_output).unwrap_or(false)
+    stack
+        .blocks
+        .first()
+        .map(|(_, b)| b.has_output)
+        .unwrap_or(false)
 }
 
 /// `.blocklyText` and the editable-field rules from Open Roberta's `css.js`.
@@ -121,6 +129,11 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
     let mut overlays = String::new();
     let mut children = String::new();
     let mut fields = String::new();
+    // Blockly carves a second contour into a parent reporter for every
+    // connected inline value. That contour is transparent (and therefore
+    // white on a worksheet), not a painted white stroke. It keeps same-colour
+    // Boolean blocks visually separate as they nest recursively.
+    let mut inline_holes = String::new();
 
     for (index, row) in layout.rows.iter().enumerate() {
         let spec_row = &block.rows[index];
@@ -131,14 +144,42 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
 
         // Fields first, so the outline below can consume the row.
         for (position, field) in row.fields.iter().enumerate() {
-            fields.push_str(&render_field(
-                &spec_row.fields[position],
-                field.x,
-                field.y,
-                field.width,
-                &colours,
-                colours.fill,
-            ));
+            let field_spec = &spec_row.fields[position];
+            match field_spec {
+                SegmentSpec::InlineValue { check, value } => {
+                    if let (Some(child_layout), Some(child_spec)) =
+                        (field.inline_value.as_ref(), value.as_ref())
+                    {
+                        inline_holes.push_str(&inline_hole_path(field, child_layout, row.y));
+                        // A reporter's coloured output tab reaches TAB_WIDTH
+                        // to the left of its own origin, exactly filling this
+                        // inline socket.
+                        children.push_str(&format!(
+                            "<g transform=\"translate({} {})\">{}</g>",
+                            fmt(field.x + TAB_WIDTH),
+                            fmt(row.y + 6.0),
+                            render_block(child_spec, child_layout, theme)
+                        ));
+                    } else {
+                        inline_holes.push_str(&empty_inline_hole_path(field, row.y));
+                        fields.push_str(&render_empty_inline_socket(
+                            field.x,
+                            row.y,
+                            check,
+                            theme,
+                            colours.fill,
+                        ));
+                    }
+                }
+                _ => fields.push_str(&render_field(
+                    field_spec,
+                    field.x,
+                    field.y,
+                    field.width,
+                    &colours,
+                    colours.fill,
+                )),
+            }
         }
 
         match row.kind.as_str() {
@@ -156,8 +197,9 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
                         ));
                     }
                     _ => {
-                        // An empty socket announces the type it wants.
-                        if let Some(check) = row.check.as_deref() {
+                        // An empty socket announces the type it wants — but
+                        // only when there is exactly one type to name.
+                        if let Some(check) = single_check(&row.check) {
                             overlays.push_str(&format!(
                                 "<path d=\"M {},{} {}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\"/>",
                                 fmt(layout.right_edge),
@@ -202,9 +244,10 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
 
     draw_bottom(&mut steps, layout.square_bottom_left, layout.has_next);
 
-    // A typed output plug is a separate path in the colour of the data type,
-    // so the main outline stops at the top of the tab.
-    let typed_output = layout.has_output && layout.output_check.is_some();
+    // A typed output plug is a separate path, so the main outline stops at
+    // the top of the tab. A plug that names several types takes the block's
+    // own colour, exactly as `renderDrawLeft_` does.
+    let typed_output = layout.has_output && !layout.output_check.is_empty();
     if typed_output {
         steps.push(format!("V {}", fmt(TAB_HEIGHT)));
         steps.push("z".to_string());
@@ -212,25 +255,36 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
         draw_left(&mut steps, layout.has_output);
     }
 
+    steps.push(inline_holes);
+
     let stroke = match colours.stroke {
         Some(colour) => format!(" stroke=\"{colour}\" stroke-width=\"1\""),
         None => String::new(),
     };
 
+    let fill_rule = if steps.iter().any(|step| step.starts_with("M ")) {
+        " fill-rule=\"evenodd\""
+    } else {
+        ""
+    };
     let mut svg = format!(
-        "<path d=\"{}\" fill=\"{}\"{}/>",
+        "<path d=\"{}\" fill=\"{}\"{} {}/>",
         steps.join(" "),
         colours.fill,
+        fill_rule,
         stroke
     );
 
     if typed_output {
-        let check = layout.output_check.as_deref().unwrap_or("");
+        let plug = match single_check(&layout.output_check) {
+            Some(check) => connection_colour(check, theme).to_string(),
+            None => colours.fill.to_string(),
+        };
         svg.push_str(&format!(
             "<path d=\"M 0,{} {} z\" fill=\"{}\"{}/>",
             fmt(TAB_HEIGHT),
             TAB_PATH_DOWN_OUTER,
-            connection_colour(check, theme),
+            plug,
             stroke
         ));
     }
@@ -241,6 +295,44 @@ fn render_block(block: &BlockSpec, layout: &BlockLayout, theme: &str) -> String 
     svg
 }
 
+/// The internal contour from Blockly's `renderDrawRight_` for a filled inline
+/// input. Its left edge follows the reporter output tab, while its right and
+/// lower edges leave a deliberately tight half-pixel breathing room around
+/// the child. This keeps the white knockout visible without making nested
+/// Boolean expressions look separated by a wide gap.
+/// With `fill-rule=evenodd` this becomes a true knockout in the parent path.
+fn inline_hole_path(field: &measure::FieldLayout, child: &BlockLayout, row_y: f32) -> String {
+    let child_x = field.x + TAB_WIDTH;
+    let left = child_x - 0.5;
+    let right = child_x + child.right_edge + 0.5;
+    let tail = (child.bottom - TAB_HEIGHT + 0.5).max(0.0);
+    format!(
+        "M {},{} h {} v 1 {} v {} h {} z",
+        fmt(right),
+        fmt(row_y + 5.5),
+        fmt(left - right),
+        TAB_PATH_DOWN_INNER,
+        fmt(tail),
+        fmt(right - left),
+    )
+}
+
+/// The companion contour for an empty inline input. It follows the exact
+/// `renderDrawRight_` shape (including the output-tab-shaped left side), so a
+/// worksheet's background shows through rather than a fabricated white box.
+fn empty_inline_hole_path(field: &measure::FieldLayout, row_y: f32) -> String {
+    let left = field.x + 6.0;
+    let right = field.x + field.width;
+    format!(
+        "M {},{} h {} v 1 {} v 5 h {} z",
+        fmt(right),
+        fmt(row_y + 5.0),
+        fmt(left - right),
+        TAB_PATH_DOWN_INNER,
+        fmt(right - left),
+    )
+}
+
 fn render_field(
     segment: &SegmentSpec,
     x: f32,
@@ -249,7 +341,13 @@ fn render_field(
     colours: &crate::theme::BlockColours,
     block_fill: &str,
 ) -> String {
-    let mono = matches!(segment, SegmentSpec::Text { monospace: true, .. });
+    let mono = matches!(
+        segment,
+        SegmentSpec::Text {
+            monospace: true,
+            ..
+        }
+    );
     let baseline = y + FIELD_TEXT_BASELINE;
 
     match segment {
@@ -264,7 +362,7 @@ fn render_field(
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{r}\" ry=\"{r}\" fill=\"{colour}\" fill-opacity=\"1\"/>",
             fmt(x + FIELD_BOX_X),
             fmt(y),
-            fmt(FIELD_BOX_PAD),
+            fmt(width + FIELD_BOX_PAD),
             fmt(FIELD_BOX_HEIGHT),
             r = fmt(FIELD_BOX_RADIUS),
         ),
@@ -323,8 +421,76 @@ fn render_field(
             escape_text(&measure::display_text(segment)),
             r = fmt(FIELD_BOX_RADIUS),
         ),
-        SegmentSpec::Icon { .. } | SegmentSpec::Block { .. } | SegmentSpec::PixelMatrix { .. } => {
+        SegmentSpec::Image { value } => render_image_field(value, x, y, colours),
+        SegmentSpec::Icon { name } if name == "plus" => format!(
+            "<g transform=\"translate({} {})\"><rect width=\"16\" height=\"16\" fill-opacity=\"0\"/><path d=\"M18 10h-4v-4c0-1.104-.896-2-2-2s-2 .896-2 2l.071 4h-4.071c-1.104 0-2 .896-2 2s.896 2 2 2l4.071-.071-.071 4.071c0 1.104.896 2 2 2s2-.896 2-2v-4.071l4 .071c1.104 0 2-.896 2-2s-.896-2-2-2z\" transform=\"scale(.67)\" fill=\"#fff\" fill-opacity=\".6\"/></g>",
+            fmt(x),
+            fmt(y),
+        ),
+        SegmentSpec::Icon { name } if name == "quote_open" || name == "quote_close" => {
+            let quote = if name == "quote_open" { "“" } else { "”" };
+            format!(
+                "<text class=\"nepo-field-text\" x=\"{}\" y=\"{}\" font-size=\"16\">{quote}</text>",
+                fmt(x),
+                fmt(y + FIELD_TEXT_BASELINE + 1.0),
+            )
+        }
+        SegmentSpec::Icon { .. }
+        | SegmentSpec::Block { .. }
+        | SegmentSpec::InlineValue { .. }
+        | SegmentSpec::PixelMatrix { .. } => {
             String::new()
         }
+    }
+}
+
+fn render_empty_inline_socket(
+    x: f32,
+    row_y: f32,
+    checks: &[String],
+    theme: &str,
+    block_fill: &str,
+) -> String {
+    let stroke = single_check(checks)
+        .map(|check| connection_colour(check, theme))
+        .unwrap_or(block_fill);
+    format!(
+        "<path d=\"M {},{} {}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\"/>",
+        fmt(x + 6.0),
+        fmt(row_y + 8.6),
+        INPUT_TYPE_PATH,
+        stroke,
+        INPUT_TYPE_STROKE_WIDTH,
+    )
+}
+
+fn render_image_field(name: &str, x: f32, y: f32, colours: &crate::theme::BlockColours) -> String {
+    let pixels = image_pixels(name);
+    let mut svg = format!(
+        "<rect x=\"{}\" y=\"{}\" width=\"24\" height=\"24\" rx=\"3\" fill=\"{}\" fill-opacity=\"{}\"/>",
+        fmt(x), fmt(y), colours.field_fill, colours.field_fill_opacity
+    );
+    for (row, pattern) in pixels.iter().enumerate() {
+        for (column, on) in pattern.chars().enumerate() {
+            if on == '#' {
+                svg.push_str(&format!(
+                    "<rect x=\"{}\" y=\"{}\" width=\"3\" height=\"3\" fill=\"#000\"/>",
+                    fmt(x + 4.5 + column as f32 * 3.0),
+                    fmt(y + 4.5 + row as f32 * 3.0),
+                ));
+            }
+        }
+    }
+    svg
+}
+
+fn image_pixels(name: &str) -> [&'static str; 5] {
+    match name {
+        "Herz" | "Heart" => [".#.#.", "#####", "#####", ".###.", "..#.."],
+        "Lächeln" | "Smile" => [".....", ".#.#.", ".....", "#...#", ".###."],
+        "Strichmännchen" | "Stick figure" => ["..#..", ".###.", "..#..", ".#.#.", "#...#"],
+        "Giraffe" => ["..#..", ".###.", "..#..", ".#.#.", ".#.#."],
+        "Regenschirm" | "Umbrella" => [".###.", "#####", "..#..", "..#..", ".###."],
+        _ => [".....", ".....", ".....", ".....", "....."],
     }
 }

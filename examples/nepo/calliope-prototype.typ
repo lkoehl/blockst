@@ -30,6 +30,12 @@ Start
   nepo("Zeige Text \"Hallo\""),
   nepo("Schalte RGB LED an (#ff0000)"),
   nepo("Taste A gedrückt?"),
+  nepo("Warte ms 1 + 2"),
+  nepo("Warte bis Taste A gedrückt? und wahr"),
+  nepo("gib geschüttelt Lage"),
+  nepo("Spiele Viertelnote C4"),
+  nepo("Zeige Bild Herz"),
+  nepo("Kommentar \"Notiz\""),
   nepo("
 Wiederhole unendlich oft
   Zeige Text \"Hallo\"

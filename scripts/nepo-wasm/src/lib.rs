@@ -29,7 +29,9 @@ fn input_string(json_len: u32, entry: &str) -> Result<String, i32> {
     let bytes = read_args(json_len as usize);
     match String::from_utf8(bytes) {
         Ok(text) => Ok(text),
-        Err(_) => Err(send_error(format!("nepo-wasm: {entry} expected UTF-8 bytes."))),
+        Err(_) => Err(send_error(format!(
+            "nepo-wasm: {entry} expected UTF-8 bytes."
+        ))),
     }
 }
 

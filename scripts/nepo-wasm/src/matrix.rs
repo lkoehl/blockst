@@ -37,6 +37,12 @@ pub fn expand(block: &mut BlockSpec) {
                     if let SegmentSpec::Block { block } = field {
                         expand(block);
                     }
+                    if let SegmentSpec::InlineValue {
+                        value: Some(block), ..
+                    } = field
+                    {
+                        expand(block);
+                    }
                 }
                 if let Some(value) = row.value.as_mut() {
                     expand(value);
@@ -56,14 +62,23 @@ fn matrix_rows(cells: &[String]) -> Vec<RowSpec> {
     let mut rows = Vec::with_capacity(SIZE + 1);
 
     // Column ruler: "0", then "  1" .. "  4" (two leading spaces, monospace).
-    let mut ruler = vec![SegmentSpec::Text { value: "0".to_string(), monospace: true }];
+    let mut ruler = vec![SegmentSpec::Text {
+        value: "0".to_string(),
+        monospace: true,
+    }];
     for column in 1..SIZE {
-        ruler.push(SegmentSpec::Text { value: format!("  {column}"), monospace: true });
+        ruler.push(SegmentSpec::Text {
+            value: format!("  {column}"),
+            monospace: true,
+        });
     }
     rows.push(dummy_row(ruler));
 
     for index in 0..SIZE {
-        let mut fields = vec![SegmentSpec::Text { value: index.to_string(), monospace: true }];
+        let mut fields = vec![SegmentSpec::Text {
+            value: index.to_string(),
+            monospace: true,
+        }];
         let source: Vec<char> = cells
             .get(index)
             .map(|row| row.chars().collect())
@@ -96,7 +111,7 @@ fn dummy_row(fields: Vec<SegmentSpec>) -> RowSpec {
         // `setAlign(Blockly.ALIGN_RIGHT)` on every row of the image block.
         align: "right".to_string(),
         fields,
-        check: None,
+        check: Vec::new(),
         value: None,
         body: Vec::new(),
     }

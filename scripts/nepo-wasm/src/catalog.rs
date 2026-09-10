@@ -1,7 +1,7 @@
 //! The block catalog: structure from `data/blocks.toml`, text from
 //! `data/locales/<lang>.toml`, both embedded at compile time.
 
-use crate::model::{BlockSpec, RowSpec, SegmentSpec};
+use crate::model::{deserialize_checks, BlockSpec, RowSpec, SegmentSpec};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -24,9 +24,9 @@ pub struct BlockDef {
     pub platforms: Vec<String>,
     pub shape: String,
     pub category: String,
-    /// Output data type for `value` blocks.
-    #[serde(default)]
-    pub check: Option<String>,
+    /// Output data types for `value` blocks.
+    #[serde(default, deserialize_with = "deserialize_checks")]
+    pub check: Vec<String>,
     #[serde(default)]
     pub fields: HashMap<String, FieldDef>,
 }
@@ -34,8 +34,8 @@ pub struct BlockDef {
 #[derive(Debug, Clone, Deserialize)]
 pub struct FieldDef {
     pub kind: String,
-    #[serde(default)]
-    pub check: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_checks")]
+    pub check: Vec<String>,
     #[serde(default)]
     pub default: Option<String>,
 }
@@ -191,7 +191,10 @@ pub fn catalog() -> &'static Catalog {
             );
         }
 
-        Catalog { blocks: blocks.blocks, languages }
+        Catalog {
+            blocks: blocks.blocks,
+            languages,
+        }
     })
 }
 
@@ -200,6 +203,7 @@ pub fn catalog() -> &'static Catalog {
 pub enum Binding {
     Dropdown(String),
     Text(String),
+    Number(String),
     Colour(String),
     Matrix(Vec<String>),
     Value(BlockSpec),
@@ -231,7 +235,7 @@ pub fn build_block(
     for tokens in &pattern.rows {
         let mut fields: Vec<SegmentSpec> = Vec::new();
         let mut kind = "dummy".to_string();
-        let mut check = None;
+        let mut check = Vec::new();
         let mut value = None;
         let mut body = Vec::new();
 
@@ -257,13 +261,42 @@ pub fn build_block(
                             };
                             fields.push(SegmentSpec::Dropdown { value: selected });
                         }
-                        "text" => {
+                        // Generic sensors with only one available mode still
+                        // use Blockly's editable FieldDropdown, but it has no
+                        // arrow. Model it as an input-shaped fixed choice.
+                        "mode" => {
+                            let selected = match bindings.get(name) {
+                                Some(Binding::Dropdown(text)) => text.clone(),
+                                _ => language
+                                    .dropdown_options(id, name)
+                                    .first()
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            };
+                            fields.push(SegmentSpec::Input { value: selected });
+                        }
+                        "text" | "number" => {
                             let text = match bindings.get(name) {
-                                Some(Binding::Text(text)) => text.clone(),
+                                Some(Binding::Text(text)) | Some(Binding::Number(text)) => {
+                                    text.clone()
+                                }
                                 _ => field.default.clone().unwrap_or_default(),
                             };
                             fields.push(SegmentSpec::Input { value: text });
                         }
+                        // A label used purely as a gap. `robControls_start`
+                        // has one: `appendField('  ')` between the title and
+                        // the hidden debug field, and it is worth two spaces
+                        // plus a separator of block width.
+                        "spacer" => {
+                            fields.push(SegmentSpec::Text {
+                                value: field.default.clone().unwrap_or_else(|| "  ".to_string()),
+                                monospace: false,
+                            });
+                        }
+                        "icon" => fields.push(SegmentSpec::Icon {
+                            name: field.default.clone().unwrap_or_default(),
+                        }),
                         "colour" => {
                             let colour = match bindings.get(name) {
                                 Some(Binding::Colour(colour)) => colour.clone(),
@@ -280,6 +313,27 @@ pub fn build_block(
                                 _ => vec![String::new(); crate::matrix::SIZE],
                             };
                             fields.push(SegmentSpec::PixelMatrix { rows: cells });
+                        }
+                        "image" => {
+                            let selected = match bindings.get(name) {
+                                Some(Binding::Dropdown(text)) => text.clone(),
+                                _ => language
+                                    .dropdown_options(id, name)
+                                    .first()
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            };
+                            fields.push(SegmentSpec::Image { value: selected });
+                        }
+                        "inline_value" => {
+                            let value = match bindings.get(name) {
+                                Some(Binding::Value(block)) => Some(Box::new(block.clone())),
+                                _ => None,
+                            };
+                            fields.push(SegmentSpec::InlineValue {
+                                check: field.check.clone(),
+                                value,
+                            });
                         }
                         "value" => {
                             kind = "value".to_string();

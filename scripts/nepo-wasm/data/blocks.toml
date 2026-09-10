@@ -1,76 +1,58 @@
-# NEPO block catalog (prototype)
+# NEPO block catalog
 #
 # Structure only: what shape a block has, which category colours it, and what
 # kind of field or socket each placeholder in the localised pattern stands for.
 # The visible text lives in data/locales/<lang>.toml, so a translation never
 # touches this file and a new block never touches Rust.
 #
-# Transcribed by hand from the official sources:
-#   OpenRoberta/blockly  blocks/mbedControls.js, blocks/mbedActions.js,
-#                        blocks/mbedImage.js, blocks/mbedColour.js,
-#                        blocks/robControls.js, blocks/robSensorDefinitions.js
+# The block set and the ids are taken from the robot's own toolbox,
+#   openroberta-lab RobotMbed/src/main/resources/calliope/
+#     program.toolbox.beginner.xml   which blocks a beginner is offered
+#     program.default.xml            which start block a new program gets
+#     configuration.default.xml      which ports the dropdowns offer
+# and the structures from the block definitions in OpenRoberta/blockly.
 #
 # shape:    start | statement | cap | value
 # category: keys of Blockly.CAT_*_RGB (see src/theme.rs)
-# check:    the block's output data type, one of Blockly.DATA_TYPE
+# check:    the data types a connection accepts. A single type colours the
+#           socket or plug; a list leaves it plain, exactly as Blockly's
+#           drawInputType_ does.
 #
 # field kinds:
 #   dropdown  a menu; options come from the locale
+#   mode      a fixed sensor mode, styled as a field without a dropdown arrow
 #   text      an editable text field
+#   number    an editable numeric field
 #   colour    a colour swatch
 #   matrix    the 5x5 LED grid (expanded by src/matrix.rs)
+#   image     a compact predefined 5x5-image dropdown
+#   spacer    a label that exists only to take up room
 #   value     a socket for a reporting block, typed by `check`
+#   inline_value a socket inside a row, for reporter composition
 #   statement a mouth holding a stack of blocks
 
-# --- 1. Program start ----------------------------------------------------
-# mbedControls_start: CAT_ACTIVITY_RGB, no previous connection, has next.
-# The plus-mutator that grows a global-variable mouth is out of scope here.
-[blocks.mbedControls_start]
+# ===== Start =============================================================
+# program.default.xml gives a new Calliope program a robControls_start, not
+# the mbedControls_start that also exists in blockly. The `  ` spacer is real:
+# `appendField('  ')` sits between the title and the hidden DEBUG field and is
+# worth two spaces plus a separator of block width.
+[blocks.robControls_start]
 platforms = ["calliope", "calliopev3", "microbit"]
 shape = "start"
 category = "activity"
+fields.GAP = { kind = "spacer", default = "  " }
 
-# --- 2. Show text --------------------------------------------------------
-# appendValueInput('OUT').appendField(DISPLAY_SHOW).appendField(TYPE dropdown)
-#   .setCheck(['Number','Boolean','String'])
-# The socket is drawn in the String colour: a single check drives the colour,
-# and String is the type the block is used with in class.
+# ===== TOOLBOX_ACTION ====================================================
+
+# setCheck(['Number','Boolean','String']) — three types, so the empty socket
+# stays plain rather than naming one of them.
 [blocks.mbedActions_display_text]
 platforms = ["calliope", "calliopev3", "microbit"]
 shape = "statement"
 category = "action"
 fields.TYPE = { kind = "dropdown" }
-fields.OUT = { kind = "value", check = "String" }
+fields.OUT = { kind = "value", check = ["Number", "Boolean", "String"] }
 
-# --- 3. Switch the RGB LED on -------------------------------------------
-# Follows the RGBLED_ON pattern in blocks/robActionsNewConfig.js:
-# appendValueInput('COLOR').appendField(RGBLED_ON).setCheck('Colour')
-[blocks.mbedActions_leds_on]
-platforms = ["calliope", "calliopev3"]
-shape = "statement"
-category = "action"
-fields.COLOR = { kind = "value", check = "Colour" }
-
-# --- 4. Key pressed? -----------------------------------------------------
-# robSensorDefinitions.js: sensors.key.calliope, mode PRESSED, type Boolean,
-# question = true. Reporting block, so the left plug is Boolean-coloured.
-[blocks.robSensors_key_isPressed]
-platforms = ["calliope", "calliopev3", "microbit"]
-shape = "value"
-category = "sensor"
-check = "Boolean"
-fields.PORT = { kind = "dropdown" }
-
-# --- 5. Repeat forever ---------------------------------------------------
-# robControls_loopForever: CAT_CONTROL_RGB, a dummy row with the title and a
-# statement row labelled "mache".
-[blocks.robControls_loopForever]
-platforms = ["calliope", "calliopev3", "microbit"]
-shape = "statement"
-category = "control"
-fields.DO = { kind = "statement" }
-
-# --- 6. Show image -------------------------------------------------------
 [blocks.mbedActions_display_image]
 platforms = ["calliope", "calliopev3", "microbit"]
 shape = "statement"
@@ -78,17 +60,221 @@ category = "action"
 fields.TYPE = { kind = "dropdown" }
 fields.VALUE = { kind = "value", check = "Image" }
 
-# --- Reporting blocks the six above plug into ---------------------------
+[blocks.mbedActions_display_clear]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "action"
 
-[blocks.text_text]
+[blocks.mbedActions_play_note]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "action"
+fields.DURATION = { kind = "dropdown" }
+fields.NOTE = { kind = "dropdown" }
+
+# The Calliope mini's built-in RGB LED. The older mbedActions_leds_on is
+# rewritten into this by the lab's expansion.xslt; the port is hidden, so the
+# block shows only the colour socket.
+[blocks.actions_rgbLed_hidden_on_calliope]
+platforms = ["calliope"]
+shape = "statement"
+category = "action"
+fields.COLOUR = { kind = "value", check = "Colour" }
+
+[blocks.actions_rgbLed_hidden_off_calliope]
+platforms = ["calliope"]
+shape = "statement"
+category = "action"
+
+# ===== TOOLBOX_SENSOR ====================================================
+
+# robSensors.js builds this from sensors.key.calliope. Its mode field is a
+# FieldHidden because there is only one mode, so the block reads
+# "title - port - question" and nothing else.
+[blocks.robSensors_key_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Boolean"
+fields.PORT = { kind = "dropdown" }
+
+[blocks.robSensors_pintouch_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Boolean"
+fields.PORT = { kind = "dropdown" }
+
+[blocks.robSensors_gesture_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Boolean"
+fields.MODE = { kind = "dropdown" }
+
+[blocks.robSensors_compass_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Number"
+fields.MODE = { kind = "mode" }
+
+[blocks.robSensors_sound_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Number"
+fields.MODE = { kind = "mode" }
+
+[blocks.robSensors_timer_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Number"
+fields.MODE = { kind = "mode" }
+fields.PORT = { kind = "dropdown" }
+
+[blocks.robSensors_temperature_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Number"
+fields.MODE = { kind = "mode" }
+
+[blocks.robSensors_light_getSample]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "sensor"
+check = "Number"
+fields.MODE = { kind = "mode" }
+
+[blocks.mbedSensors_timer_reset]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "sensor"
+fields.PORT = { kind = "dropdown" }
+
+# ===== TOOLBOX_CONTROL ===================================================
+
+[blocks.robControls_loopForever]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.DO = { kind = "statement" }
+
+[blocks.controls_repeat_ext]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.TIMES = { kind = "value", check = "Number" }
+fields.DO = { kind = "statement" }
+
+# Blockly names this `controls_whileUntil`.  The German toolbox puts the
+# condition after the mode selector: “Wiederhole solange <Bedingung>”.
+[blocks.controls_whileUntil]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.MODE = { kind = "dropdown" }
+fields.BOOL = { kind = "value", check = "Boolean" }
+fields.DO = { kind = "statement" }
+
+[blocks.robControls_if]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.MUTATOR = { kind = "icon", default = "plus" }
+fields.IF0 = { kind = "value", check = "Boolean" }
+fields.DO0 = { kind = "statement" }
+
+# Two mouths. This is the block that decides where a statement stack has to
+# live in the data model: on the row, not on the block.
+[blocks.robControls_ifElse]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.MUTATOR = { kind = "icon", default = "plus" }
+fields.IF0 = { kind = "value", check = "Boolean" }
+fields.DO0 = { kind = "statement" }
+fields.ELSE = { kind = "statement" }
+
+[blocks.robControls_wait_time]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.WAIT = { kind = "value", check = "Number" }
+
+# The beginner toolbox offers this condition wait alongside the timed wait.
+# Its plus-mutator can add further conditions; this is the unmutated base
+# block, which has one Boolean socket.
+[blocks.robControls_wait_for]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "control"
+fields.WAIT0 = { kind = "value", check = "Boolean" }
+
+# ===== Reporting blocks ==================================================
+
+[blocks.text]
 platforms = ["calliope", "calliopev3", "microbit"]
 shape = "value"
 category = "text"
 check = "String"
+fields.OPEN = { kind = "icon", default = "quote_open" }
 fields.TEXT = { kind = "text" }
+fields.CLOSE = { kind = "icon", default = "quote_close" }
+
+[blocks.math_number]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "math"
+check = "Number"
+fields.NUM = { kind = "number", default = "0" }
+
+[blocks.logic_boolean]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "logic"
+check = "Boolean"
+fields.BOOL = { kind = "dropdown" }
+
+[blocks.logic_compare]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "logic"
+check = "Boolean"
+fields.A = { kind = "inline_value" }
+fields.OP = { kind = "dropdown" }
+fields.B = { kind = "inline_value" }
+
+[blocks.logic_operation]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "logic"
+check = "Boolean"
+fields.A = { kind = "inline_value", check = "Boolean" }
+fields.OP = { kind = "dropdown" }
+fields.B = { kind = "inline_value", check = "Boolean" }
+
+[blocks.math_arithmetic]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "math"
+check = "Number"
+fields.A = { kind = "inline_value", check = "Number" }
+fields.OP = { kind = "dropdown" }
+fields.B = { kind = "inline_value", check = "Number" }
+
+[blocks.math_random_int]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "math"
+check = "Number"
+fields.FROM = { kind = "inline_value", check = "Number" }
+fields.TO = { kind = "inline_value", check = "Number" }
 
 [blocks.mbedColour_picker]
-platforms = ["calliope", "calliopev3"]
+platforms = ["calliope", "calliopev3", "microbit"]
 shape = "value"
 category = "colour"
 check = "Colour"
@@ -102,3 +288,16 @@ shape = "value"
 category = "image"
 check = "Image"
 fields.PICTURE = { kind = "matrix" }
+
+[blocks.mbedImage_get_image]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "value"
+category = "image"
+check = "Image"
+fields.IMAGE = { kind = "image" }
+
+[blocks.text_comment]
+platforms = ["calliope", "calliopev3", "microbit"]
+shape = "statement"
+category = "text"
+fields.TEXT = { kind = "text" }

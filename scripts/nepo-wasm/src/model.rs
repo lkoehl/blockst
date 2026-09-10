@@ -11,7 +11,41 @@
 //! `Dialect` is still carried through, so that if the two renderers ever move
 //! into one crate the dispatch point already exists and is explicit.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// A connection's accepted data types.
+///
+/// Blockly lets `setCheck` take either one type or a list, and the difference
+/// is visible: `drawInputType_` only paints a socket in its type colour when
+/// there is exactly one type to name. "Zeige Text" accepts Number, Boolean and
+/// String, so its empty socket stays plain — modelling that as a single
+/// "String" would invent a hint Open Roberta does not give.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawCheck {
+    One(String),
+    Many(Vec<String>),
+}
+
+pub fn deserialize_checks<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match Option::<RawCheck>::deserialize(deserializer)? {
+        None => Vec::new(),
+        Some(RawCheck::One(one)) => vec![one],
+        Some(RawCheck::Many(many)) => many,
+    })
+}
+
+/// The single type a connection names, or `None` when it accepts several and
+/// therefore names none of them.
+pub fn single_check(checks: &[String]) -> Option<&str> {
+    match checks {
+        [only] => Some(only.as_str()),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -64,10 +98,10 @@ pub struct BlockSpec {
     /// `start` | `statement` | `cap` | `value`
     pub shape: String,
     pub category: String,
-    /// Data type this block reports, for `value` blocks: Number, String,
-    /// Boolean, Colour, Image. Drives the colour of the output tab.
-    #[serde(default)]
-    pub check: Option<String>,
+    /// Data types this block reports, for `value` blocks: Number, String,
+    /// Boolean, Colour, Image. A single type colours the output plug.
+    #[serde(default, deserialize_with = "deserialize_checks")]
+    pub check: Vec<String>,
     #[serde(default)]
     pub segments: Vec<SegmentSpec>,
     #[serde(default)]
@@ -90,9 +124,9 @@ pub struct RowSpec {
     pub align: String,
     #[serde(default)]
     pub fields: Vec<SegmentSpec>,
-    /// Data type accepted by this row's socket.
-    #[serde(default)]
-    pub check: Option<String>,
+    /// Data types accepted by this row's socket.
+    #[serde(default, deserialize_with = "deserialize_checks")]
+    pub check: Vec<String>,
     /// Block plugged into a `value` row.
     #[serde(default)]
     pub value: Option<Box<BlockSpec>>,
@@ -148,6 +182,16 @@ pub enum SegmentSpec {
     /// Scratch model.
     #[serde(rename = "block")]
     Block { block: Box<BlockSpec> },
+    /// A value socket that lives among a row's fields, as used by arithmetic
+    /// and comparison blocks. Unlike `RowSpec::value`, this is not a notch on
+    /// the right edge of the surrounding block.
+    #[serde(rename = "inline_value")]
+    InlineValue {
+        #[serde(default, deserialize_with = "deserialize_checks")]
+        check: Vec<String>,
+        #[serde(default)]
+        value: Option<Box<BlockSpec>>,
+    },
     #[serde(rename = "dropdown")]
     Dropdown { value: String },
     #[serde(rename = "colour")]
@@ -165,6 +209,11 @@ pub enum SegmentSpec {
     /// hand in the catalog.
     #[serde(rename = "pixel")]
     PixelCell { value: String },
+    /// A compact predefined 5x5 image selected by Open Roberta's image
+    /// dropdown. The renderer draws a small LED preview rather than relying
+    /// on the lab's PNG asset bundle.
+    #[serde(rename = "image")]
+    Image { value: String },
 }
 
 impl SegmentSpec {
@@ -178,6 +227,7 @@ impl SegmentSpec {
                 | SegmentSpec::ColourField { .. }
                 | SegmentSpec::PixelMatrix { .. }
                 | SegmentSpec::PixelCell { .. }
+                | SegmentSpec::Image { .. }
         )
     }
 }

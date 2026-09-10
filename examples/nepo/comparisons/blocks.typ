@@ -13,6 +13,11 @@
   "Taste A gedrückt?",
   "Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\nEnde",
   "Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)",
+  "Warte ms 1 + 2",
+  "Warte bis Taste A gedrückt? und wahr",
+  "gib geschüttelt Lage",
+  "Spiele Viertelnote C4",
+  "Zeige Bild Herz",
 )
 
 #for (index, source) in blocks.enumerate() {

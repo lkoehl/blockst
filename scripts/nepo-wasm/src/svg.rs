@@ -32,6 +32,10 @@ pub const FIELD_BOX_RADIUS: f32 = 2.0;
 pub const FIELD_BOX_X: f32 = -SEP_SPACE_X / 2.0;
 /// `'width': field width + Blockly.BlockSvg.SEP_SPACE_X`
 pub const FIELD_BOX_PAD: f32 = SEP_SPACE_X;
+/// The editable colour swatch has a fixed visual width. Open Roberta gives it
+/// more room than an empty text field, so it remains legible as a standalone
+/// Colour reporter when plugged into an RGB-LED action.
+pub const COLOUR_FIELD_WIDTH: f32 = 22.0;
 /// `textElement_` carries `'y': this.size_.height - 12.5`
 pub const FIELD_TEXT_BASELINE: f32 = FIELD_HEIGHT - 12.5;
 /// `Blockly.FieldPixelbox` fixes its own width at 16.
@@ -77,7 +81,12 @@ fn num(value: f32) -> String {
 }
 
 /// `renderDrawTop_`
-pub fn draw_top(steps: &mut Vec<String>, right_edge: f32, square_top_left: bool, has_previous: bool) {
+pub fn draw_top(
+    steps: &mut Vec<String>,
+    right_edge: f32,
+    square_top_left: bool,
+    has_previous: bool,
+) {
     if square_top_left {
         steps.push("m 0,0".to_string());
     } else {
