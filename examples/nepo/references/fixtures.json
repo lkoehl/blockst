@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Shared inputs for the geometry cross-check.",
+    "Text widths are stipulated, not measured: they are an input to both the",
+    "reference and the candidate, so that a mismatch can only come from the",
+    "geometry. Real widths depend on the reader's font and are checked",
+    "separately, by eye, on the comparison page."
+  ],
+  "widths": {
+    "Start": 33.0,
+    "Zeige": 38.0,
+    "Text ▾": 44.0,
+    "Bild ▾": 42.0,
+    "Schalte RGB LED an": 132.0,
+    "Taste": 36.0,
+    "A ▾": 22.0,
+    "gedrückt?": 62.0,
+    "Wiederhole unendlich oft": 168.0,
+    "mache": 40.0,
+    "Hallo": 33.0,
+    "0": 8.8,
+    "1": 8.8,
+    "2": 8.8,
+    "3": 8.8,
+    "4": 8.8,
+    "  1": 26.4,
+    "  2": 26.4,
+    "  3": 26.4,
+    "  4": 26.4,
+    "#": 8.8
+  },
+  "cases": [
+    { "id": "mbedControls_start", "source": "Start" },
+    { "id": "mbedActions_display_text", "source": "Zeige Text \"Hallo\"" },
+    { "id": "mbedActions_display_text_empty", "source": "Zeige Text" },
+    { "id": "mbedActions_leds_on", "source": "Schalte RGB LED an (#ff0000)" },
+    { "id": "robSensors_key_isPressed", "source": "Taste A gedrückt?" },
+    { "id": "robControls_loopForever", "source": "Wiederhole unendlich oft\n  Zeige Text \"Hallo\"\nEnde" },
+    { "id": "mbedImage_image", "source": "Zeige Bild (.#.#.|.#.#.|.....|#...#|.###.)" }
+  ]
+}
